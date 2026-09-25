@@ -1,0 +1,13 @@
+flowchart TD
+    A[Web Client] --> B[Spring Boot Application]
+    B --> C[Controller Layer]
+    C --> D[Service Layer]
+    D --> E[Repository Layer]
+    E --> F[JDBC]
+    F --> G[(H2 Database)]
+
+    subgraph FutureBoundary[Future Mock External Service Boundary]
+        H[Mock Confirmation Notification Service]
+    end
+
+    D -. future book/cancel confirmation .-> H

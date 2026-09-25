@@ -1,0 +1,49 @@
+erDiagram
+    USERS ||--o{ APPOINTMENTS : books
+    PROVIDERS ||--o{ AVAILABILITY_SLOTS : offers
+    SERVICES ||--o{ AVAILABILITY_SLOTS : scheduled_for
+    PROVIDERS ||--o{ APPOINTMENTS : receives
+    SERVICES ||--o{ APPOINTMENTS : requested_for
+    AVAILABILITY_SLOTS ||--o| APPOINTMENTS : reserved_by
+
+    USERS {
+        BIGINT user_id PK
+        VARCHAR first_name
+        VARCHAR last_name
+        VARCHAR email UK
+        VARCHAR password
+        VARCHAR role
+    }
+
+    PROVIDERS {
+        BIGINT provider_id PK
+        VARCHAR name
+        VARCHAR email UK
+        VARCHAR phone
+    }
+
+    SERVICES {
+        BIGINT service_id PK
+        VARCHAR name UK
+        VARCHAR description
+        INT duration_minutes
+    }
+
+    AVAILABILITY_SLOTS {
+        BIGINT slot_id PK
+        BIGINT provider_id FK
+        BIGINT service_id FK
+        TIMESTAMP start_time
+        TIMESTAMP end_time
+        BOOLEAN is_available
+    }
+
+    APPOINTMENTS {
+        BIGINT appointment_id PK
+        BIGINT user_id FK
+        BIGINT provider_id FK
+        BIGINT service_id FK
+        BIGINT slot_id FK_UK
+        VARCHAR status
+        TIMESTAMP created_at
+    }
