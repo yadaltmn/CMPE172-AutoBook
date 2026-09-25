@@ -1,5 +1,6 @@
 package com.autobook;
 
+import com.autobook.model.AppointmentStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -69,8 +70,8 @@ class AutobookApplicationTests {
 	void appointmentsRejectDuplicateSlotBookings() {
 		assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update("""
 				INSERT INTO appointments (user_id, provider_id, service_id, slot_id, status)
-				VALUES (2, 2, 1, 6, 'BOOKED')
-				"""));
+				VALUES (2, 2, 1, 6, ?)
+				""", AppointmentStatus.BOOKED.name()));
 	}
 
 }
