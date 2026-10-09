@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AutoBook Milestone 2 Report</title>
+<style>
+  @page { size: Letter; margin: 0.8in 0.75in; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1b2433; }
+  h1, h2, h3 { color: #0b2545; }
+  h2 { font-size: 15pt; border-bottom: 2px solid #0b2545; padding-bottom: 3px; margin-top: 26px; page-break-after: avoid; }
+  h3 { font-size: 12pt; margin-bottom: 4px; page-break-after: avoid; }
+  code { font-family: Menlo, Consolas, monospace; font-size: 9pt; background: #eef1f6; padding: 0 3px; border-radius: 3px; }
+  pre { font-family: Menlo, Consolas, monospace; font-size: 8.3pt; background: #f6f8fb; border: 1px solid #dfe4ec; border-left: 3px solid #0b2545;
+        padding: 8px 10px; white-space: pre-wrap; page-break-inside: avoid; line-height: 1.35; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; font-size: 9.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cfd6e1; padding: 4px 7px; text-align: left; vertical-align: top; }
+  th { background: #0b2545; color: #fff; font-weight: 600; }
+  .cover { height: 9in; display: flex; flex-direction: column; justify-content: center; page-break-after: always; }
+  .cover h1 { font-size: 34pt; margin: 0 0 6px; }
+  .cover .sub { font-size: 16pt; color: #2c5282; margin-bottom: 40px; }
+  .cover .meta { font-size: 11.5pt; line-height: 1.8; }
+  .bar { width: 80px; height: 6px; background: #d9971e; margin-bottom: 24px; }
+  figure { margin: 10px 0 16px; page-break-inside: avoid; text-align: center; }
+  figure img { max-width: 100%; max-height: 4.1in; border: 1px solid #cfd6e1; }
+  figcaption { font-size: 9pt; color: #5b6577; margin-top: 4px; }
+  .grid2 { display: flex; gap: 10px; }
+  .grid2 figure { flex: 1; }
+  .note { background: #fdf3e1; border-left: 3px solid #d9971e; padding: 6px 10px; font-size: 9.5pt; }
+  .page-break { page-break-before: always; }
+  ul, ol { padding-left: 22px; }
+  li { margin-bottom: 2px; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="bar"></div>
+  <h1>AutoBook</h1>
+  <div class="sub">Milestone 2: Core Implementation, Booking &amp; Concurrency</div>
+  <div class="meta">
+    CMPE 172 &middot; Enterprise Software Platforms<br>
+    San José State University<br>
+    Author: Jada Nguyen (GitHub: yadaltmn)<br>
+    Repository: https://github.com/yadaltmn/CMPE172-AutoBook (branch <code>main</code>)<br>
+    Stack: Java 17 &middot; Spring Boot 4.1.1 &middot; Spring Security &middot; JDBC (JdbcTemplate) &middot; H2 &middot; Thymeleaf &middot; Bootstrap 5
+  </div>
+</section>
+
+<h2>1. Project Overview</h2>
+<p>AutoBook is an automotive service appointment system. Customers search open appointment slots offered by repair shops,
+book a slot, and manage or cancel their appointments. Providers (repair shops) publish and remove availability and see
+who booked with them. Administrators manage provider records and review all activity.</p>
+<p>Milestone 1 delivered the requirements, the five-table relational schema, and a layered Spring Boot skeleton with two
+read-only JSON endpoints (<code>GET /</code> and <code>GET /slots</code>). Milestone 2 turns that skeleton into a working,
+secured, concurrent booking system with a real website. All Milestone 1 endpoints and tests are preserved.</p>
+
+<h2>2. Milestone 2 Requirements and Status</h2>
+<table>
+  <tr><th>Requirement</th><th>Status</th><th>Where</th></tr>
+  <tr><td>Login for customer, provider, admin (BCrypt, sessions, logout)</td><td>Done, tested</td><td><code>SecurityConfig</code>, <code>DatabaseUserDetailsService</code></td></tr>
+  <tr><td>Role-based authorization, 401/403, CSRF, no impersonation</td><td>Done, tested</td><td><code>SecurityConfig</code>, <code>CurrentUserService</code></td></tr>
+  <tr><td>Browse/filter/paginate slots (SQL LIMIT/OFFSET)</td><td>Done, tested</td><td><code>SlotRepository</code>, <code>/browse</code>, <code>/api/slots</code></td></tr>
+  <tr><td>Customer booking workflow with confirmation</td><td>Done, tested</td><td><code>BookingService</code>, customer pages</td></tr>
+  <tr><td>Concurrency: one winner, others 409, DB consistent</td><td>Done, tested</td><td><code>ConcurrentBookingIntegrationTests</code></td></tr>
+  <tr><td>Cancellation with ownership, history preserved, slot reusable</td><td>Done, tested</td><td><code>AppointmentService</code></td></tr>
+  <tr><td>Provider availability management</td><td>Done, tested</td><td><code>ProviderService</code>, provider pages</td></tr>
+  <tr><td>Admin dashboard and provider management</td><td>Done, tested</td><td><code>AdminService</code>, admin pages</td></tr>
+  <tr><td>Frontend (Thymeleaf + Bootstrap 5)</td><td>Done, tested</td><td><code>templates/</code>, <code>static/</code></td></tr>
+  <tr><td>Centralized error handling</td><td>Done, tested</td><td><code>ApiExceptionHandler</code>, <code>WebModelAdvice</code></td></tr>
+  <tr><td>JDBC only (no JPA/Hibernate/ORM)</td><td>Done</td><td>All SQL in <code>repository/</code></td></tr>
+</table>
+
+<h2>3. Updated Architecture</h2>
+<p>The application keeps the Milestone 1 layered architecture. Both the website and the JSON API go through the same
+services, so business rules and transactions are written once.</p>
+<pre><code>Browser (Thymeleaf pages)          API client (curl / Postman / tests)
+        |                                   |
+  controller/web/*PageController     controller/*ApiController, HomeController, SlotController
+        \___________________   ____________/
+                            \ /
+     Spring Security filter chain (session auth, roles, CSRF, 401/403)
+                             |
+        service/  BookingService, AppointmentService, ProviderService, SlotService,
+                  AdminService, CurrentUserService      (@Transactional boundaries)
+                             |
+        repository/  SlotRepository, AppointmentRepository, ProviderRepository,
+                     UserRepository, ServiceRepository   (JdbcTemplate + SQL)
+                             |
+                     H2 in-memory database (schema.sql, seed.sql)</code></pre>
+<p>Frontend-to-backend flow for a booking: the browser submits the Thymeleaf form
+<code>POST /customer/book</code> (with the hidden <code>_csrf</code> token) &rarr; Spring Security checks the session and
+<code>ROLE_CUSTOMER</code> &rarr; <code>CustomerPageController.book()</code> resolves the customer from the session and calls
+<code>BookingService.book()</code> &rarr; the service runs one transaction through <code>SlotRepository</code> and
+<code>AppointmentRepository</code> &rarr; on success the controller redirects to the confirmation page; on a
+<code>BookingConflictException</code> it redirects to <code>/browse</code> with a flash message. The JSON path
+<code>POST /api/appointments</code> calls the same service method and returns 201 or a JSON error.</p>
+
+<h2>4. Database Design</h2>
+<p>Tables: <code>users</code>, <code>providers</code>, <code>services</code>, <code>availability_slots</code>,
+<code>appointments</code> (ER diagram in <code>docs/diagrams/er-diagram.mmd</code>). Milestone 2 changes:</p>
+<ul>
+  <li><code>providers.user_id</code> (unique FK to <code>users</code>) links a repair shop to its login account, so a provider is
+    always derived from the signed-in user.</li>
+  <li><code>UNIQUE(slot_id)</code> on <code>appointments</code> was replaced. It blocked rebooking after a cancellation unless history
+    was deleted. It is now a generated column with a unique constraint:</li>
+</ul>
+<pre><code>-- schema.sql (appointments)
+slot_id BIGINT NOT NULL,
+status VARCHAR(30) NOT NULL,
+created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+-- Holds slot_id only while the appointment still occupies the slot (BOOKED or COMPLETED).
+active_slot_id BIGINT GENERATED ALWAYS AS (
+    CASE WHEN status IN ('BOOKED', 'COMPLETED') THEN slot_id END
+),
+...
+CONSTRAINT chk_appointments_status CHECK (status IN ('BOOKED', 'CANCELLED', 'COMPLETED')),
+CONSTRAINT uq_appointments_active_slot UNIQUE (active_slot_id)</code></pre>
+<p>A unique constraint allows any number of NULLs, so cancelled rows (<code>active_slot_id = NULL</code>) remain as history while
+the database still forbids two active appointments for one slot. Other integrity rules kept from Milestone 1:
+<code>CHECK(end_time &gt; start_time)</code>, <code>UNIQUE(provider_id, start_time, end_time)</code>, role/status CHECKs, and all
+foreign keys. Indexes were added for appointment lookups by user and provider and for the slot search.</p>
+<p>Seed slot times are expressions relative to <code>CURRENT_DATE</code> (for example
+<code>DATEADD('MINUTE', 540, DATEADD('DAY', 1, CAST(CURRENT_DATE AS TIMESTAMP)))</code>), so the demo always has upcoming slots.</p>
+
+<h2>5. Authentication</h2>
+<p>Spring Security form login authenticates against the <code>users</code> table through the Milestone 1
+<code>DatabaseUserDetailsService</code> (JDBC query <code>SELECT email, password, role FROM users WHERE email = ?</code>). Passwords are
+BCrypt hashes verified by the <code>BCryptPasswordEncoder</code> bean. The session is stored server-side (JSESSIONID cookie).
+A custom login page posts to <code>/login</code>; successful logins go to <code>/dashboard</code>, which redirects by role, or back to the
+page originally requested. <code>POST /logout</code> invalidates the session.</p>
+
+<h2>6. Role-Based Access Control</h2>
+<pre><code>// SecurityConfig.java
+http.authorizeHttpRequests(auth -&gt; auth
+        .requestMatchers("/", "/slots", "/login", "/browse", "/error", "/access-denied",
+                "/css/**", "/js/**", "/images/**", "/webjars/**", "/favicon.ico").permitAll()
+        .requestMatchers(HttpMethod.GET, "/api/slots", "/api/slots/*", "/api/providers", "/api/services", "/api/csrf").permitAll()
+        .requestMatchers("/customer/**", "/api/appointments/**").hasRole("CUSTOMER")
+        .requestMatchers("/provider/**", "/api/provider/**").hasRole("PROVIDER")
+        .requestMatchers("/admin/**", "/api/admin/**").hasRole("ADMIN")
+        .anyRequest().authenticated());
+
+// API clients get JSON 401/403; browsers are redirected to /login or shown /access-denied.
+http.exceptionHandling(exceptions -&gt; exceptions
+        .defaultAuthenticationEntryPointFor((request, response, ex) -&gt; writeJsonError(..., 401, ...), apiRequests)
+        .defaultAccessDeniedHandlerFor((request, response, ex) -&gt; writeJsonError(..., 403, ...), apiRequests)
+        .defaultAuthenticationEntryPointFor(new LoginUrlAuthenticationEntryPoint("/login"), AnyRequestMatcher.INSTANCE)
+        .defaultAccessDeniedHandlerFor(browserAccessDeniedHandler(), AnyRequestMatcher.INSTANCE));</code></pre>
+<p>URL rules decide which role may call an endpoint; the service layer decides which records a user may touch. No controller accepts a
+user or provider id from the client. <code>CurrentUserService</code> always loads the user from the authenticated session, and
+services compare ownership:</p>
+<pre><code>// AppointmentService.java
+private void requireOwner(AppUser customer, AppointmentDto appointment) {
+    if (!appointment.customerId().equals(customer.userId())) {
+        throw new ForbiddenOperationException("You can only view or change your own appointments.");
+    }
+}</code></pre>
+<p>A test posts <code>{"slotId":2,"userId":2}</code> as Jada and verifies the appointment is still created for Jada (user 1).
+CSRF protection stays enabled for all state-changing requests: Thymeleaf forms include the token automatically, and API clients
+fetch it from <code>GET /api/csrf</code> and send it in the <code>X-CSRF-TOKEN</code> header.</p>
+
+<h2>7. Booking Workflow</h2>
+<ol>
+  <li>The customer opens <code>/browse</code>. <code>SlotRepository.searchAvailableSlots</code> builds a parameterized query
+    (<code>is_available = TRUE AND start_time &gt; now</code>, plus optional provider, service, date filters), ordered by
+    <code>start_time</code>, with <code>LIMIT ? OFFSET ?</code>. A matching <code>COUNT(*)</code> gives the total for pagination.</li>
+  <li>"Book this slot" opens <code>/customer/book/{slotId}</code> (review page with service, duration, provider, date, time).</li>
+  <li>"Confirm booking" posts the form; <code>BookingService.book()</code> runs the transaction shown below.</li>
+  <li>The customer is redirected to <code>/customer/appointments/{id}/confirmation</code> (confirmation number <code>AB-00005</code>, for example).</li>
+</ol>
+<pre><code>// BookingService.java
+@Transactional(isolation = Isolation.READ_COMMITTED)
+public AppointmentDto book(AppUser customer, BookingRequest request) {
+    if (customer.role() != UserRole.CUSTOMER) { throw new ForbiddenOperationException(...); }
+    long slotId = request.slotId();
+    LocalDateTime now = LocalDateTime.now(clock);
+    try {
+        // Critical section starts here: the row lock is held until the transaction ends.
+        SlotLock slot = slotRepository.lockById(slotId)
+                .orElseThrow(() -&gt; new ResourceNotFoundException("Appointment slot " + slotId + " was not found."));
+        if (request.serviceId() != null &amp;&amp; !request.serviceId().equals(slot.serviceId())) {
+            throw new InvalidRequestException("The selected service does not match this appointment slot.");
+        }
+        if (!slot.startTime().isAfter(now)) {
+            throw new InvalidRequestException("This appointment slot has already started and can no longer be booked.");
+        }
+        if (!slot.available()) {
+            throw new BookingConflictException("Sorry, this appointment slot has already been booked.");
+        }
+        if (slotRepository.claimIfAvailable(slotId, now) != 1) {
+            throw new BookingConflictException("Sorry, this appointment slot has already been booked.");
+        }
+        long appointmentId = appointmentRepository.insert(
+                customer.userId(), slot.providerId(), slot.serviceId(), slotId, AppointmentStatus.BOOKED, now);
+        return appointmentRepository.findById(appointmentId).orElseThrow();
+    } catch (DuplicateKeyException | ConcurrencyFailureException ex) {
+        // Last line of defence: the database constraint or lock manager rejected a competing booking.
+        throw new BookingConflictException("Sorry, this appointment slot has already been booked.");
+    }
+}</code></pre>
+<pre><code>-- SlotRepository.lockById            (pessimistic row lock)
+SELECT slot_id, provider_id, service_id, start_time, end_time, is_available
+FROM availability_slots WHERE slot_id = ? FOR UPDATE
+
+-- SlotRepository.claimIfAvailable    (atomic conditional update; 0 rows = someone else won)
+UPDATE availability_slots SET is_available = FALSE
+WHERE slot_id = ? AND is_available = TRUE AND start_time &gt; ?
+
+-- AppointmentRepository.insert
+INSERT INTO appointments (user_id, provider_id, service_id, slot_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?)</code></pre>
+<table>
+  <tr><th>Outcome</th><th>HTTP (API)</th><th>Website</th></tr>
+  <tr><td>Booked</td><td>201 Created + <code>Location</code></td><td>Confirmation page</td></tr>
+  <tr><td>Slot does not exist</td><td>404</td><td>Not-found page</td></tr>
+  <tr><td>Slot in the past / service mismatch / invalid body</td><td>400</td><td>Message on slot list</td></tr>
+  <tr><td>Slot already booked / lost the race</td><td>409</td><td>"Sorry, this appointment slot has already been booked."</td></tr>
+  <tr><td>Not signed in / wrong role / no CSRF token</td><td>401 / 403 / 403</td><td>Login redirect / access-denied page</td></tr>
+</table>
+
+<h3>Cancellation and history</h3>
+<pre><code>// AppointmentService.cancel (condensed; same lock order as booking: slot row first, then appointment row)
+@Transactional(isolation = Isolation.READ_COMMITTED)
+public AppointmentDto cancel(AppUser customer, long appointmentId) {
+    AppointmentDto appointment = appointmentRepository.findById(appointmentId).orElseThrow(...);
+    requireOwner(customer, appointment);                                   // 403 for someone else's
+    SlotLock slot = slotRepository.lockById(appointment.slotId()).orElseThrow(...);
+    AppointmentStatus currentStatus = appointmentRepository.lockStatusById(appointmentId).orElseThrow(...);
+    if (currentStatus != AppointmentStatus.BOOKED) { throw new BookingConflictException(...); }   // 409
+    if (!slot.startTime().isAfter(LocalDateTime.now(clock))) { throw new InvalidRequestException(...); } // 400
+    if (appointmentRepository.updateStatus(appointmentId, BOOKED, CANCELLED) != 1) { throw new BookingConflictException(...); }
+    slotRepository.reopen(appointment.slotId());                           // slot can be booked again
+    return appointmentRepository.findById(appointmentId).orElseThrow();
+}</code></pre>
+<p><code>GET /customer/appointments</code> (and <code>GET /api/appointments/me</code>) splits a customer's rows into
+<em>upcoming</em> (BOOKED and in the future) and <em>history</em> (past, CANCELLED, COMPLETED). Only the customer's own rows are queried
+(<code>WHERE appointment.user_id = ?</code>).</p>
+
+<h2>8. Provider Workflow</h2>
+<p><code>ProviderService</code> resolves the provider from the signed-in account (<code>providers.user_id</code>). Creating a slot validates
+start &lt; end, a future start, at most 8 hours, an existing service, and a length of at least the service's duration. It then locks
+the provider row and checks for overlaps:</p>
+<pre><code>// ProviderService.createSlot
+providerRepository.lockProvider(provider.providerId());      // SELECT provider_id FROM providers WHERE provider_id = ? FOR UPDATE
+if (slotRepository.countOverlapping(provider.providerId(), start, end) &gt; 0) {
+    throw new BookingConflictException("This time overlaps another slot on your schedule.");   // 409
+}
+long slotId = slotRepository.insert(provider.providerId(), service.serviceId(), start, end);
+
+-- SlotRepository.countOverlapping: half-open intervals, so back-to-back slots are allowed
+SELECT COUNT(*) FROM availability_slots WHERE provider_id = ? AND start_time &lt; ? AND end_time &gt; ?</code></pre>
+<p>Locking the provider row closes a phantom-read gap: without it, two simultaneous requests could both count zero overlaps and both
+insert. Removing a slot locks the slot row (so a customer cannot book it mid-removal), returns 403 if the slot belongs to another
+provider and 409 if it is booked. A slot with cancelled-appointment history is closed (<code>is_available = FALSE</code>) instead of deleted,
+which keeps the foreign keys and history intact.</p>
+
+<h2>9. Frontend Screenshots</h2>
+<p>All screenshots were captured from the running application (<code>java -jar target/Autobook-0.0.1-SNAPSHOT.jar</code>) with headless
+Chrome, using the real login form and seed data. All 19 images are in <code>docs/screenshots/</code>.</p>
+<figure><img src="screenshots/01-home.png" alt="Home page"><figcaption>Figure 1. Home page with the VIEW AVAILABLE SLOTS call to action and live counts from the database.</figcaption></figure>
+<div class="grid2">
+  <figure><img src="screenshots/03-browse.png" alt="Browse"><figcaption>Figure 2. Browse page with filters and pagination.</figcaption></figure>
+  <figure><img src="screenshots/02-login.png" alt="Login"><figcaption>Figure 3. Login page.</figcaption></figure>
+</div>
+<div class="grid2">
+  <figure><img src="screenshots/06-booking-review.png" alt="Review"><figcaption>Figure 4. Step 2: review booking.</figcaption></figure>
+  <figure><img src="screenshots/07-booking-confirmation.png" alt="Confirmation"><figcaption>Figure 5. Step 3: booking confirmed.</figcaption></figure>
+</div>
+<div class="grid2">
+  <figure><img src="screenshots/08-my-appointments.png" alt="My appointments"><figcaption>Figure 6. My appointments: upcoming and history.</figcaption></figure>
+  <figure><img src="screenshots/09-cancel-confirmation.png" alt="Cancel"><figcaption>Figure 7. Cancellation confirmation.</figcaption></figure>
+</div>
+<div class="grid2">
+  <figure><img src="screenshots/11-slot-unavailable-message.png" alt="Unavailable"><figcaption>Figure 8. Friendly message when a slot is already booked.</figcaption></figure>
+  <figure><img src="screenshots/12-provider-dashboard.png" alt="Provider dashboard"><figcaption>Figure 9. Provider dashboard.</figcaption></figure>
+</div>
+<div class="grid2">
+  <figure><img src="screenshots/14-provider-slot-added.png" alt="Availability"><figcaption>Figure 10. Provider availability: add form and schedule with booking states.</figcaption></figure>
+  <figure><img src="screenshots/16-admin-dashboard.png" alt="Admin"><figcaption>Figure 11. Admin dashboard.</figcaption></figure>
+</div>
+<div class="grid2">
+  <figure><img src="screenshots/17-access-denied.png" alt="Access denied"><figcaption>Figure 12. Admin opening a customer page: 403 access-denied page.</figcaption></figure>
+  <figure><img src="screenshots/19-browse-mobile.png" alt="Mobile" style="max-height:3.2in"><figcaption>Figure 13. Responsive browse page at phone width.</figcaption></figure>
+</div>
+
+<h2 class="page-break">10. Race Condition Explanation</h2>
+<p>A race condition occurs when the result depends on how concurrent operations interleave. A naive booking does
+<em>check-then-act</em>:</p>
+<pre><code>T1: SELECT is_available FROM availability_slots WHERE slot_id = 7   -- TRUE
+T2: SELECT is_available FROM availability_slots WHERE slot_id = 7   -- TRUE (T1 has not written yet)
+T1: UPDATE ... SET is_available = FALSE;  INSERT appointment (customer A);  COMMIT
+T2: UPDATE ... SET is_available = FALSE;  INSERT appointment (customer B);  COMMIT   -- double booking</code></pre>
+<p>The <strong>critical section</strong> is everything from reading the slot's availability to inserting the appointment. It must
+run as one indivisible unit per slot. A Java <code>synchronized</code> block is not enough: it only protects one JVM, does not cover
+other application instances or direct database access, and does not roll back partial work on failure. AutoBook therefore enforces
+mutual exclusion in the database.</p>
+
+<h2>11. Transaction Management</h2>
+<p>Every state-changing service method is annotated <code>@Transactional</code>. Spring Boot's auto-configured
+<code>JdbcTransactionManager</code> (a <code>DataSourceTransactionManager</code> for JDBC) binds one JDBC connection to the thread for the whole method, turns off
+auto-commit, commits when the method returns, and rolls back when it throws a runtime exception. All the <code>JdbcTemplate</code>
+calls inside a service method share that connection and transaction. Domain exceptions (<code>BookingConflictException</code>,
+<code>InvalidRequestException</code>, ...) are unchecked, so any validation failure after the lock was taken also rolls back cleanly.</p>
+<table>
+  <tr><th>Method</th><th>Transaction contents</th></tr>
+  <tr><td><code>BookingService.book</code></td><td>lock slot &rarr; validate &rarr; conditional UPDATE slot &rarr; INSERT appointment</td></tr>
+  <tr><td><code>AppointmentService.cancel</code></td><td>lock slot &rarr; lock appointment &rarr; conditional UPDATE status &rarr; reopen slot</td></tr>
+  <tr><td><code>ProviderService.createSlot</code></td><td>lock provider &rarr; overlap check &rarr; INSERT slot</td></tr>
+  <tr><td><code>ProviderService.removeSlot</code></td><td>lock slot &rarr; booked check &rarr; DELETE or close slot</td></tr>
+  <tr><td><code>ProviderService.completeAppointment</code>, <code>AdminService.updateProvider</code></td><td>conditional UPDATE</td></tr>
+</table>
+
+<h2>12. Locking and Isolation Strategy</h2>
+<h3>Chosen isolation level: READ COMMITTED</h3>
+<p>Booking and cancellation declare <code>@Transactional(isolation = Isolation.READ_COMMITTED)</code>, which is also H2's default.
+READ COMMITTED prevents dirty reads (a transaction never sees another's uncommitted booking). On its own it still allows
+non-repeatable reads and lost updates, the check-then-act problem above. AutoBook closes that gap with explicit row locks
+instead of raising the isolation level:</p>
+<table>
+  <tr><th>Strategy</th><th>Used?</th><th>Reason</th></tr>
+  <tr><td>Pessimistic locking (<code>SELECT ... FOR UPDATE</code>)</td><td><strong>Yes</strong></td><td>Serializes all transactions that touch the same slot. Simple to reason about, and lock waits are short because the critical section is a few statements.</td></tr>
+  <tr><td>Atomic conditional update (<code>UPDATE ... WHERE is_available = TRUE</code>)</td><td><strong>Yes</strong></td><td>Exactly one transaction can flip the flag; the affected row count tells the loser it lost.</td></tr>
+  <tr><td>Database uniqueness constraint (<code>uq_appointments_active_slot</code>)</td><td><strong>Yes</strong></td><td>Final invariant enforced by the DBMS even if code is bypassed.</td></tr>
+  <tr><td>Optimistic version column</td><td>No</td><td>Would need a <code>version</code> column and client-side retries. Under contention for a popular slot most attempts would fail and retry. A row lock gives the same safety with a clearer flow.</td></tr>
+  <tr><td>SERIALIZABLE isolation</td><td>No</td><td>Stronger than needed and more abort-prone; the targeted locks give the required guarantee at READ COMMITTED.</td></tr>
+</table>
+<p><strong>Lock ordering:</strong> booking and cancellation both lock the slot row before the appointment row, so they cannot deadlock.
+<strong>Lock timeout:</strong> the datasource URL sets <code>LOCK_TIMEOUT=10000</code>, so a waiting transaction blocks for at most 10 s.</p>
+<h3>Retry behaviour</h3>
+<p>AutoBook does not retry automatically. A transaction that loses the race is not a transient failure: the slot really is taken, so
+retrying would only fail again. The loser receives 409 Conflict ("Sorry, this appointment slot has already been booked."), and the
+website sends the customer back to the slot list to choose another time. If a lock cannot be acquired within the timeout, H2 raises
+a lock-timeout error. Spring translates it into a <code>ConcurrencyFailureException</code>, and the service also maps that to 409, so
+the client can safely try again.</p>
+
+<h2>13. ACID Properties</h2>
+<ul>
+  <li><strong>Atomicity:</strong> the slot UPDATE and appointment INSERT commit together or not at all. If the INSERT fails, the slot
+    is not left marked unavailable with no appointment.</li>
+  <li><strong>Consistency:</strong> the CHECK, FOREIGN KEY, and UNIQUE constraints (including <code>uq_appointments_active_slot</code>)
+    are never violated. The invariant "a slot is unavailable exactly when it has an active appointment (or was closed by its
+    provider)" is maintained by changing both tables in one transaction.</li>
+  <li><strong>Isolation:</strong> READ COMMITTED plus <code>FOR UPDATE</code> row locks make competing bookings for one slot behave as if
+    they ran one after another. Bookings for different slots do not block each other.</li>
+  <li><strong>Durability:</strong> committed bookings persist for the lifetime of the database. H2 runs in memory for this course
+    project, so data is reset when the application restarts. A file or server database (H2 file mode, PostgreSQL, MySQL) would
+    provide durability across restarts with no code change, because the code only uses standard JDBC.</li>
+</ul>
+
+<h2>14. Concurrency Test Results</h2>
+<p><code>ConcurrentBookingIntegrationTests</code> starts the application on a random port with its own in-memory database
+(<code>autobook_concurrency</code>), so it can commit real transactions without affecting other tests. A <code>CountDownLatch</code>
+releases all threads at the same instant, and every <code>Future.get</code> has a bounded timeout (20 s, plus a 30 s JUnit
+<code>@Timeout</code>) so a deadlock could never hang the build.</p>
+<pre><code>@Test
+@Timeout(value = 30, unit = TimeUnit.SECONDS)
+void twoCustomersBookingTheSameSlotOverHttpGetOneSuccessAndOneConflict() throws Exception {
+    long slotId = createFutureSlot(5);
+    HttpClient jada = loggedInClient("jada.nguyen@example.com");     // real login form + CSRF token
+    HttpClient alex = loggedInClient("alex.rivera@example.com");
+
+    List&lt;Callable&lt;Integer&gt;&gt; attempts = List.of(
+            () -&gt; postBooking(jada, slotId),
+            () -&gt; postBooking(alex, slotId));
+    List&lt;Integer&gt; statuses = runSimultaneously(attempts);
+
+    assertEquals(1, statuses.stream().filter(code -&gt; code == 201).count(), "exactly one booking succeeds: " + statuses);
+    assertEquals(1, statuses.stream().filter(code -&gt; code == 409).count(), "exactly one booking conflicts: " + statuses);
+    assertConsistent(slotId);   // exactly one BOOKED appointment, slot.is_available = FALSE
+}</code></pre>
+<table>
+  <tr><th>Test</th><th>Scenario</th><th>Assertions</th><th>Result</th></tr>
+  <tr><td><code>twoCustomersBookingTheSameSlotOverHttp...</code></td><td>2 logged-in customers POST the same slot simultaneously over HTTP</td><td>one 201, one 409, one active appointment, slot unavailable</td><td>Pass</td></tr>
+  <tr><td><code>manyConcurrentBookingAttemptsProduceExactlyOneAppointment</code></td><td>12 customers call <code>BookingService.book</code> on one slot at once</td><td>1 success, 11 conflicts, one active appointment</td><td>Pass</td></tr>
+  <tr><td><code>simultaneousCancelAndRebookLeaveSlotConsistent</code></td><td>owner cancels while another customer rebooks</td><td>either rebooked (1 active, unavailable) or rejected (0 active, available)</td><td>Pass</td></tr>
+</table>
+<p>The concurrency class passed in 5 consecutive repeated runs during development. The application log showed that the losing
+requests were rejected at the row-lock/availability check (the second transaction waited on <code>FOR UPDATE</code>, then saw the
+slot was taken), so the unique-constraint fallback was not needed in those runs.</p>
+
+<h2>15. Error Handling</h2>
+<p><code>ApiExceptionHandler</code> (<code>@RestControllerAdvice</code> for JSON controllers) maps exceptions to a consistent body
+<code>{timestamp, status, error, message, path}</code>:</p>
+<table>
+  <tr><th>Status</th><th>Cause</th></tr>
+  <tr><td>400</td><td><code>InvalidRequestException</code>, bean-validation failures, malformed JSON, bad parameter types</td></tr>
+  <tr><td>401</td><td>Unauthenticated <code>/api/**</code> request (security entry point)</td></tr>
+  <tr><td>403</td><td>Wrong role, missing CSRF token, or <code>ForbiddenOperationException</code> (not the owner)</td></tr>
+  <tr><td>404</td><td><code>ResourceNotFoundException</code></td></tr>
+  <tr><td>409</td><td><code>BookingConflictException</code>, <code>DataIntegrityViolationException</code>, <code>ConcurrencyFailureException</code></td></tr>
+  <tr><td>500</td><td>Anything else; logged on the server, generic message to the client</td></tr>
+</table>
+<p>For the website, <code>WebModelAdvice</code> renders the same cases as friendly pages or flash messages. No SQL, exception class
+names, or stack traces are ever shown to users.</p>
+
+<h2>16. Automated Testing</h2>
+<p>Command: <code>./mvnw clean test</code>. Final result: <strong>85 tests run, 0 failures, 0 errors, 0 skipped</strong>
+(BUILD SUCCESS). All test classes are Spring Boot integration tests against the real H2 schema. MockMvc tests use
+<code>@Transactional</code> so each test rolls back; the concurrency tests use a separate database.</p>
+<table>
+  <tr><th>Test class</th><th>Tests</th><th>Covers</th></tr>
+  <tr><td>AutobookApplicationTests (Milestone 1)</td><td>5</td><td>context, seed data, <code>/</code>, <code>/slots</code>, DB duplicate rejection</td></tr>
+  <tr><td>SecurityIntegrationTests</td><td>17</td><td>login per role, wrong password/unknown email, 401 JSON, login redirect, cross-role 403, CSRF, logout</td></tr>
+  <tr><td>SlotSearchIntegrationTests</td><td>7</td><td>future/available only, sorting, provider/service/date filters, LIMIT/OFFSET pages, invalid params</td></tr>
+  <tr><td>BookingIntegrationTests</td><td>11</td><td>success, impersonation ignored, 404, unavailable 409, past 400, service mismatch, validation, duplicate 409, 401, provider 403, CSRF</td></tr>
+  <tr><td>ConcurrentBookingIntegrationTests</td><td>3</td><td>two-customer HTTP race, 12-thread race, cancel vs. rebook</td></tr>
+  <tr><td>CancellationIntegrationTests</td><td>9</td><td>history split, ownership 403, cancel + reopen, rebooking, status rules, DB constraint</td></tr>
+  <tr><td>ProviderAvailabilityIntegrationTests</td><td>12</td><td>schedule view, create, invalid ranges, overlap 409, removal, ownership, close-with-history, complete</td></tr>
+  <tr><td>CustomerWebPageIntegrationTests</td><td>10</td><td>home HTML vs. JSON, login page, browse, booking/cancel through pages, friendly errors, 403 pages</td></tr>
+  <tr><td>ProviderWebPageIntegrationTests</td><td>6</td><td>provider dashboard, add-slot form, validation messages, removal</td></tr>
+  <tr><td>AdminIntegrationTests</td><td>5</td><td>admin dashboard, admin APIs, provider edit + validation, provider blocked from admin</td></tr>
+</table>
+
+<h2>17. Challenges and Solutions</h2>
+<ul>
+  <li><strong>Seed data in the past.</strong> The Milestone 1 seed dates had passed, so "future slots only" would have hidden every slot.
+    Seed times are now computed from <code>CURRENT_DATE</code>.</li>
+  <li><strong>Rebooking vs. <code>UNIQUE(slot_id)</code>.</strong> Keeping cancelled history while allowing a new booking was impossible
+    with a plain unique column. H2 has no partial indexes, so a generated <code>active_slot_id</code> column with a unique constraint
+    expresses "unique among active appointments".</li>
+  <li><strong>Same URL for the old JSON endpoint and the new home page.</strong> <code>GET /</code> uses content negotiation:
+    a <code>text/html</code> handler serves browsers, and the original produces-less handler still serves JSON clients and the
+    Milestone 1 test.</li>
+  <li><strong>JSON errors vs. browser redirects.</strong> Spring Security entry points and access-denied handlers are registered per
+    request matcher, so <code>/api/**</code> gets 401/403 JSON while pages redirect to login.</li>
+  <li><strong>Testing real concurrency.</strong> MockMvc runs in one thread inside a rolled-back transaction, which cannot show a
+    race. The concurrency tests start a real server with an isolated database, log in through the real form, and use latches and
+    bounded timeouts.</li>
+  <li><strong>Overlapping provider slots.</strong> An overlap check followed by an INSERT is itself a race (phantom). Locking the
+    provider row serializes schedule changes per provider.</li>
+</ul>
+
+<h2>18. Conclusion</h2>
+<p>Milestone 2 delivers a secured, role-aware AutoBook with a complete customer booking flow, cancellation with preserved history,
+provider schedule management, an admin view, and a responsive website, all on Spring Boot with plain JDBC. Double booking is
+prevented by a transaction that combines a pessimistic row lock, an atomic conditional update, and a database uniqueness constraint.
+Integration tests that race real HTTP sessions and twelve concurrent threads against the same slot confirm it. The full suite of
+85 tests passes. Remaining work for later milestones includes persistent storage, notifications, and the AI agent and RAG features
+from the original proposal.</p>
+
+</body>
+</html>
