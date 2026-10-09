@@ -140,6 +140,13 @@ public class SlotRepository {
     }
 
     /**
+     * Returns a slot to the bookable pool after its appointment is cancelled.
+     */
+    public int reopen(long slotId) {
+        return jdbcTemplate.update("UPDATE availability_slots SET is_available = TRUE WHERE slot_id = ?", slotId);
+    }
+
+    /**
      * Builds the shared WHERE clause for searching and counting. Every value is bound as a
      * JDBC parameter; only fixed SQL fragments are concatenated.
      */

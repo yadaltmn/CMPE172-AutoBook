@@ -4,6 +4,7 @@ import com.autobook.dto.BookingRequest;
 import com.autobook.exception.BookingConflictException;
 import com.autobook.model.AppUser;
 import com.autobook.repository.UserRepository;
+import com.autobook.service.AppointmentService;
 import com.autobook.service.BookingService;
 import java.net.CookieManager;
 import java.net.URI;
@@ -55,6 +56,9 @@ class ConcurrentBookingIntegrationTests {
 	private BookingService bookingService;
 
 	@Autowired
+	private AppointmentService appointmentService;
+
+	@Autowired
 	private UserRepository userRepository;
 
 	@Autowired
@@ -100,6 +104,44 @@ class ConcurrentBookingIntegrationTests {
 		assertEquals(1, outcomes.stream().filter(code -> code == 201).count(), "exactly one booking succeeds: " + outcomes);
 		assertEquals(customers - 1, outcomes.stream().filter(code -> code == 409).count(), "all others conflict: " + outcomes);
 		assertConsistent(slotId);
+	}
+
+	@Test
+	@Timeout(value = 30, unit = TimeUnit.SECONDS)
+	void simultaneousCancelAndRebookLeaveSlotConsistent() throws Exception {
+		long slotId = createFutureSlot(7);
+		List<AppUser> users = createCustomers(2, slotId);
+		AppUser owner = users.get(0);
+		AppUser rebooker = users.get(1);
+		long appointmentId = bookingService.book(owner, new BookingRequest(slotId, null)).appointmentId();
+
+		List<Callable<Integer>> attempts = List.of(
+				() -> {
+					appointmentService.cancel(owner, appointmentId);
+					return 200;
+				},
+				() -> {
+					try {
+						bookingService.book(rebooker, new BookingRequest(slotId, null));
+						return 201;
+					} catch (BookingConflictException ex) {
+						return 409;
+					}
+				});
+		List<Integer> outcomes = runSimultaneously(attempts);
+		assertEquals(200, outcomes.get(0), "cancellation always succeeds");
+
+		Integer active = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM appointments WHERE slot_id = ? AND status = 'BOOKED'", Integer.class, slotId);
+		Boolean available = jdbcTemplate.queryForObject(
+				"SELECT is_available FROM availability_slots WHERE slot_id = ?", Boolean.class, slotId);
+		if (outcomes.get(1) == 201) {
+			assertEquals(1, active, "rebooking won after the cancellation committed");
+			assertFalse(available);
+		} else {
+			assertEquals(0, active, "rebooking ran before the cancellation and was rejected");
+			assertTrue(available, "the cancelled slot is open again");
+		}
 	}
 
 	private void assertConsistent(long slotId) {

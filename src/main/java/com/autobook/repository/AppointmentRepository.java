@@ -92,6 +92,41 @@ public class AppointmentRepository {
                 """, APPOINTMENT_ROW_MAPPER, userId);
     }
 
+    /**
+     * Locks one appointment row for the rest of the transaction and returns its current status.
+     */
+    public Optional<AppointmentStatus> lockStatusById(long appointmentId) {
+        return jdbcTemplate.query(
+                "SELECT status FROM appointments WHERE appointment_id = ? FOR UPDATE",
+                (resultSet, rowNum) -> AppointmentStatus.valueOf(resultSet.getString("status")),
+                appointmentId
+        ).stream().findFirst();
+    }
+
+    /**
+     * Conditional status change; returns 0 if the appointment was no longer in {@code expected}.
+     */
+    public int updateStatus(long appointmentId, AppointmentStatus expected, AppointmentStatus next) {
+        return jdbcTemplate.update(
+                "UPDATE appointments SET status = ? WHERE appointment_id = ? AND status = ?",
+                next.name(),
+                appointmentId,
+                expected.name()
+        );
+    }
+
+    public List<AppointmentDto> findByProviderId(long providerId) {
+        return jdbcTemplate.query(SELECT_APPOINTMENT + """
+                 WHERE appointment.provider_id = ?
+                 ORDER BY slot.start_time, appointment.appointment_id
+                """, APPOINTMENT_ROW_MAPPER, providerId);
+    }
+
+    public List<AppointmentDto> findAll() {
+        return jdbcTemplate.query(SELECT_APPOINTMENT + " ORDER BY slot.start_time DESC, appointment.appointment_id DESC",
+                APPOINTMENT_ROW_MAPPER);
+    }
+
     public long countActiveForSlot(long slotId) {
         Long count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM appointments WHERE slot_id = ? AND status = 'BOOKED'",
