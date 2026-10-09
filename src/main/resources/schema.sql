@@ -52,9 +52,15 @@ CREATE TABLE appointments (
     user_id BIGINT NOT NULL,
     provider_id BIGINT NOT NULL,
     service_id BIGINT NOT NULL,
-    slot_id BIGINT NOT NULL UNIQUE,
+    slot_id BIGINT NOT NULL,
     status VARCHAR(30) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Holds slot_id only while the appointment still occupies the slot (BOOKED or COMPLETED).
+    -- Cancelled rows become NULL here, so history is kept and the slot can be rebooked,
+    -- while the UNIQUE constraint below still allows at most one active appointment per slot.
+    active_slot_id BIGINT GENERATED ALWAYS AS (
+        CASE WHEN status IN ('BOOKED', 'COMPLETED') THEN slot_id END
+    ),
     CONSTRAINT fk_appointments_user
         FOREIGN KEY (user_id) REFERENCES users(user_id),
     CONSTRAINT fk_appointments_provider
@@ -63,5 +69,10 @@ CREATE TABLE appointments (
         FOREIGN KEY (service_id) REFERENCES services(service_id),
     CONSTRAINT fk_appointments_slot
         FOREIGN KEY (slot_id) REFERENCES availability_slots(slot_id),
-    CONSTRAINT chk_appointments_status CHECK (status IN ('BOOKED', 'CANCELLED', 'COMPLETED'))
+    CONSTRAINT chk_appointments_status CHECK (status IN ('BOOKED', 'CANCELLED', 'COMPLETED')),
+    CONSTRAINT uq_appointments_active_slot UNIQUE (active_slot_id)
 );
+
+CREATE INDEX idx_appointments_user ON appointments(user_id);
+CREATE INDEX idx_appointments_provider ON appointments(provider_id);
+CREATE INDEX idx_slots_search ON availability_slots(is_available, start_time);
