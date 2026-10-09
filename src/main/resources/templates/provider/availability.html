@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Manage availability')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container">
+    <header class="ab-page-header">
+        <p class="ab-eyebrow mb-1" th:text="${provider.name}">Provider</p>
+        <h1 class="h2">Manage availability</h1>
+        <p>Add open appointment slots and remove ones you no longer offer. Booked slots stay on the schedule.</p>
+    </header>
+
+    <div th:replace="~{fragments/layout :: flash}"></div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <section class="ab-card ab-card-body" aria-labelledby="add-heading">
+                <h2 id="add-heading" class="h5 mb-3">Add a slot</h2>
+                <form th:action="@{/provider/availability}" th:object="${slotForm}" method="post"
+                      data-slot-form data-submit-once novalidate>
+                    <div th:if="${#fields.hasGlobalErrors()}" class="alert alert-danger" th:each="err : ${#fields.globalErrors()}" th:text="${err}">Error</div>
+
+                    <div class="mb-3">
+                        <label for="serviceId" class="form-label">Service</label>
+                        <select id="serviceId" th:field="*{serviceId}" class="form-select"
+                                th:classappend="${#fields.hasErrors('serviceId')} ? 'is-invalid'"
+                                aria-describedby="serviceIdFeedback">
+                            <option value="">Choose a service</option>
+                            <option th:each="service : ${services}" th:value="${service.serviceId}"
+                                    th:attr="data-duration=${service.durationMinutes}"
+                                    th:text="${service.name} + ' (' + ${service.durationMinutes} + ' min)'">Service</option>
+                        </select>
+                        <div id="serviceIdFeedback" class="invalid-feedback" th:errors="*{serviceId}">Error</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="date" class="form-label">Date</label>
+                        <input type="date" id="date" th:field="*{date}" class="form-control" th:min="${today}"
+                               th:classappend="${#fields.hasErrors('date')} ? 'is-invalid'" aria-describedby="dateFeedback">
+                        <div id="dateFeedback" class="invalid-feedback" th:errors="*{date}">Error</div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label for="startTime" class="form-label">Start time</label>
+                            <input type="time" id="startTime" th:field="*{startTime}" class="form-control" step="900"
+                                   th:classappend="${#fields.hasErrors('startTime')} ? 'is-invalid'" aria-describedby="startFeedback">
+                            <div id="startFeedback" class="invalid-feedback" th:errors="*{startTime}">Error</div>
+                        </div>
+                        <div class="col-6">
+                            <label for="endTime" class="form-label">End time</label>
+                            <input type="time" id="endTime" th:field="*{endTime}" class="form-control" step="900"
+                                   th:classappend="${#fields.hasErrors('endTime')} ? 'is-invalid'" aria-describedby="endFeedback">
+                            <div id="endFeedback" class="invalid-feedback" th:errors="*{endTime}">Error</div>
+                        </div>
+                    </div>
+                    <p class="small ab-muted">The end time is suggested from the service length. Slots cannot overlap.</p>
+                    <button type="submit" class="btn btn-primary w-100" data-busy-text="Adding...">Add slot</button>
+                </form>
+            </section>
+        </div>
+
+        <div class="col-lg-8">
+            <section aria-labelledby="schedule-heading">
+                <h2 id="schedule-heading" class="h5 mb-3">Your schedule</h2>
+                <div th:if="${#lists.isEmpty(slots)}" class="ab-card ab-empty">
+                    <h3>No slots yet</h3>
+                    <p class="mb-0">Use the form to add your first open appointment slot.</p>
+                </div>
+                <div class="ab-card table-responsive" th:unless="${#lists.isEmpty(slots)}">
+                    <table class="table ab-table">
+                        <caption class="visually-hidden">All of your appointment slots</caption>
+                        <thead>
+                        <tr>
+                            <th scope="col">Date</th>
+                            <th scope="col">Time</th>
+                            <th scope="col">Service</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Customer</th>
+                            <th scope="col" class="text-end">Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="slot : ${slots}" th:classappend="${slot.state == 'CLOSED' or slot.state == 'COMPLETED'} ? 'ab-row-past'">
+                            <td class="fw-semibold" th:text="${#temporals.format(slot.startTime, 'EEE, MMM d')}">Date</td>
+                            <td th:text="${#temporals.format(slot.startTime, 'h:mm a')} + ' – ' + ${#temporals.format(slot.endTime, 'h:mm a')}">Time</td>
+                            <td th:text="${slot.serviceName}">Service</td>
+                            <td><span th:replace="~{fragments/layout :: status(${slot.state})}"></span></td>
+                            <td>
+                                <span th:if="${slot.customerName}" th:text="${slot.customerName}">Customer</span>
+                                <span th:unless="${slot.customerName}" class="ab-muted">&mdash;</span>
+                            </td>
+                            <td class="text-end">
+                                <form th:if="${slot.removable()}" th:action="@{/provider/availability/{id}/delete(id=${slot.slotId})}"
+                                      method="post" class="d-inline" data-submit-once>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                                            th:attr="aria-label='Remove ' + ${slot.serviceName} + ' slot on ' + ${#temporals.format(slot.startTime, 'MMM d h:mm a')}">Remove</button>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

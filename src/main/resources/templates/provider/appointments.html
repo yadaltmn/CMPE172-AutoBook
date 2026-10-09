@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Bookings')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container">
+    <header class="ab-page-header">
+        <p class="ab-eyebrow mb-1" th:text="${provider.name}">Provider</p>
+        <h1 class="h2">Bookings</h1>
+        <p>Every appointment customers have booked with you, including cancellations.</p>
+    </header>
+
+    <div th:replace="~{fragments/layout :: flash}"></div>
+
+    <div th:if="${#lists.isEmpty(appointments)}" class="ab-card ab-empty">
+        <h3>No bookings yet</h3>
+        <p class="mb-3">Customers' bookings will appear here once they reserve one of your slots.</p>
+        <a th:href="@{/provider/availability}" class="btn btn-outline-primary">Manage availability</a>
+    </div>
+
+    <div class="ab-card table-responsive" th:unless="${#lists.isEmpty(appointments)}">
+        <table class="table ab-table">
+            <caption class="visually-hidden">Appointments booked with you</caption>
+            <thead>
+            <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Time</th>
+                <th scope="col">Service</th>
+                <th scope="col">Customer</th>
+                <th scope="col">Status</th>
+                <th scope="col" class="text-end">Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="appointment : ${appointments}"
+                th:classappend="${appointment.status.name() != 'BOOKED'} ? 'ab-row-past'">
+                <td class="fw-semibold" th:text="${#temporals.format(appointment.startTime, 'EEE, MMM d, yyyy')}">Date</td>
+                <td th:text="${#temporals.format(appointment.startTime, 'h:mm a')} + ' – ' + ${#temporals.format(appointment.endTime, 'h:mm a')}">Time</td>
+                <td th:text="${appointment.serviceName}">Service</td>
+                <td>
+                    <div th:text="${appointment.customerName}">Customer</div>
+                    <div class="small ab-muted" th:text="${appointment.customerEmail}">email</div>
+                </td>
+                <td><span th:replace="~{fragments/layout :: status(${appointment.status.name()})}"></span></td>
+                <td class="text-end">
+                    <form th:if="${appointment.status.name() == 'BOOKED' and !appointment.startTime.isAfter(now)}"
+                          th:action="@{/provider/appointments/{id}/complete(id=${appointment.appointmentId})}"
+                          method="post" class="d-inline" data-submit-once>
+                        <button type="submit" class="btn btn-sm btn-outline-primary">Mark completed</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

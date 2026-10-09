@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Provider dashboard')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container">
+    <header class="ab-page-header d-flex flex-wrap justify-content-between align-items-end gap-3">
+        <div>
+            <p class="ab-eyebrow mb-1">Provider dashboard</p>
+            <h1 class="h2" th:text="${provider.name}">Downtown Auto Care</h1>
+            <p th:text="${provider.email} + (${provider.phone} != null ? ' · ' + ${provider.phone} : '')">email · phone</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a th:href="@{/provider/availability}" class="btn btn-primary">Manage availability</a>
+            <a th:href="@{/provider/appointments}" class="btn btn-outline-primary">All bookings</a>
+        </div>
+    </header>
+
+    <div th:replace="~{fragments/layout :: flash}"></div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-sm-4">
+            <div class="ab-card ab-stat">
+                <div class="ab-stat-value" th:text="${openCount}">0</div>
+                <div class="ab-stat-label">Open slots</div>
+            </div>
+        </div>
+        <div class="col-sm-4">
+            <div class="ab-card ab-stat">
+                <div class="ab-stat-value" th:text="${bookedCount}">0</div>
+                <div class="ab-stat-label">Booked slots</div>
+            </div>
+        </div>
+        <div class="col-sm-4">
+            <div class="ab-card ab-stat">
+                <div class="ab-stat-value" th:text="${completedCount}">0</div>
+                <div class="ab-stat-label">Completed appointments</div>
+            </div>
+        </div>
+    </div>
+
+    <section aria-labelledby="upcoming-heading">
+        <h2 id="upcoming-heading" class="h5 mb-3">Upcoming bookings</h2>
+        <div th:if="${#lists.isEmpty(upcoming)}" class="ab-card ab-empty">
+            <h3>No upcoming bookings yet</h3>
+            <p class="mb-3">Add open slots so customers can book with you.</p>
+            <a th:href="@{/provider/availability}" class="btn btn-outline-primary">Add availability</a>
+        </div>
+        <div class="ab-card table-responsive" th:unless="${#lists.isEmpty(upcoming)}">
+            <table class="table ab-table">
+                <caption class="visually-hidden">Upcoming bookings</caption>
+                <thead>
+                <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Time</th>
+                    <th scope="col">Service</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">Status</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="appointment : ${upcoming}">
+                    <td class="fw-semibold" th:text="${#temporals.format(appointment.startTime, 'EEE, MMM d')}">Date</td>
+                    <td th:text="${#temporals.format(appointment.startTime, 'h:mm a')} + ' – ' + ${#temporals.format(appointment.endTime, 'h:mm a')}">Time</td>
+                    <td th:text="${appointment.serviceName}">Service</td>
+                    <td>
+                        <div th:text="${appointment.customerName}">Customer</div>
+                        <div class="small ab-muted" th:text="${appointment.customerEmail}">email</div>
+                    </td>
+                    <td><span th:replace="~{fragments/layout :: status(${appointment.status.name()})}"></span></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>
