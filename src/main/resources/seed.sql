@@ -1,8 +1,14 @@
-INSERT INTO users (first_name, last_name, email, password, role) VALUES
-    ('Jada', 'Nguyen', 'jada.nguyen@example.com', 'password123', 'CUSTOMER'),
-    ('Alex', 'Rivera', 'alex.rivera@example.com', 'password123', 'CUSTOMER'),
-    ('Morgan', 'Lee', 'morgan.lee@example.com', 'password123', 'ADMIN');
+INSERT INTO users (first_name, last_name, email, password, role)
+VALUES
+    ('Jada', 'Nguyen', 'jada.nguyen@example.com',
+     '$2a$10$d8A/7t3fhv0uxuSlwJ5N8uUcD3SjUW/2HbuzMwG2Da70N6MZcr5dG', 'CUSTOMER'),
 
+    ('Alex', 'Rivera', 'alex.rivera@example.com',
+     '$2a$10$d8A/7t3fhv0uxuSlwJ5N8uUcD3SjUW/2HbuzMwG2Da70N6MZcr5dG', 'CUSTOMER'),
+
+    ('Morgan', 'Lee', 'morgan.lee@example.com',
+     '$2a$10$d8A/7t3fhv0uxuSlwJ5N8uUcD3SjUW/2HbuzMwG2Da70N6MZcr5dG', 'ADMIN');
+     
 INSERT INTO providers (name, email, phone) VALUES
     ('Downtown Auto Care', 'service@downtownautocare.example.com', '408-555-0101'),
     ('Westside Tire and Inspection', 'hello@westsidetire.example.com', '408-555-0112');
