@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Review booking')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container">
+    <header class="ab-page-header">
+        <h1 class="h2">Review your booking</h1>
+        <p>Check the details below, then confirm to reserve this appointment.</p>
+    </header>
+
+    <ol th:replace="~{fragments/layout :: steps(2)}"></ol>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <section class="ab-card ab-card-body" aria-labelledby="details-heading">
+                <h2 id="details-heading" class="h5 mb-4">Appointment details</h2>
+                <dl class="row ab-details mb-0">
+                    <dt class="col-sm-4">Service</dt>
+                    <dd class="col-sm-8">
+                        <span th:text="${slot.serviceName}">Oil Change</span>
+                        <span class="ab-chip ms-2" th:text="${slot.durationMinutes} + ' min'">45 min</span>
+                        <div class="fw-normal small ab-muted mt-1" th:text="${slot.serviceDescription}">Description</div>
+                    </dd>
+                    <dt class="col-sm-4">Repair shop</dt>
+                    <dd class="col-sm-8">
+                        <span th:text="${slot.providerName}">Provider</span>
+                        <div class="fw-normal small ab-muted" th:if="${slot.providerPhone}" th:text="${slot.providerPhone}">Phone</div>
+                    </dd>
+                    <dt class="col-sm-4">Date</dt>
+                    <dd class="col-sm-8" th:text="${#temporals.format(slot.startTime, 'EEEE, MMMM d, yyyy')}">Date</dd>
+                    <dt class="col-sm-4">Time</dt>
+                    <dd class="col-sm-8" th:text="${#temporals.format(slot.startTime, 'h:mm a')} + ' – ' + ${#temporals.format(slot.endTime, 'h:mm a')}">Time</dd>
+                    <dt class="col-sm-4">Booked for</dt>
+                    <dd class="col-sm-8" th:text="${currentUser.fullName()} + ' (' + ${currentUser.email} + ')'">Customer</dd>
+                </dl>
+            </section>
+        </div>
+        <div class="col-lg-5">
+            <section class="ab-card ab-card-body">
+                <h2 class="h5">Confirm booking</h2>
+                <p class="ab-muted small">
+                    The slot is reserved the moment you confirm. If someone else books it first,
+                    we'll let you know so you can choose another time.
+                    You can cancel any time before the appointment starts.
+                </p>
+                <form th:action="@{/customer/book}" method="post" data-submit-once>
+                    <input type="hidden" name="slotId" th:value="${slot.slotId}">
+                    <input type="hidden" name="serviceId" th:value="${slot.serviceId}">
+                    <button type="submit" class="btn btn-primary btn-lg w-100 mb-2" data-busy-text="Booking...">Confirm booking</button>
+                    <a th:href="@{/browse}" class="btn btn-link w-100">Back to available slots</a>
+                </form>
+            </section>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

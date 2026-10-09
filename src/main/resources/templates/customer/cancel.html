@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Cancel appointment')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            <section class="ab-card ab-card-body p-4 p-md-5" aria-labelledby="cancel-heading">
+                <h1 id="cancel-heading" class="h3 mb-2">Cancel this appointment?</h1>
+                <p class="ab-muted mb-4">
+                    The time slot will be released so other customers can book it.
+                    Your cancelled appointment stays in your history.
+                </p>
+                <dl class="row ab-details">
+                    <dt class="col-sm-4">Service</dt>
+                    <dd class="col-sm-8" th:text="${appointment.serviceName}">Service</dd>
+                    <dt class="col-sm-4">Repair shop</dt>
+                    <dd class="col-sm-8" th:text="${appointment.providerName}">Provider</dd>
+                    <dt class="col-sm-4">Date</dt>
+                    <dd class="col-sm-8" th:text="${#temporals.format(appointment.startTime, 'EEEE, MMMM d, yyyy')}">Date</dd>
+                    <dt class="col-sm-4">Time</dt>
+                    <dd class="col-sm-8" th:text="${#temporals.format(appointment.startTime, 'h:mm a')} + ' – ' + ${#temporals.format(appointment.endTime, 'h:mm a')}">Time</dd>
+                </dl>
+                <form th:action="@{/customer/appointments/{id}/cancel(id=${appointment.appointmentId})}" method="post"
+                      class="d-flex flex-wrap gap-2" data-submit-once>
+                    <button type="submit" class="btn btn-danger" data-busy-text="Cancelling...">Yes, cancel appointment</button>
+                    <a th:href="@{/customer/appointments}" class="btn btn-outline-secondary">Keep appointment</a>
+                </form>
+            </section>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

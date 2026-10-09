@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Booking confirmed')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container">
+    <header class="ab-page-header">
+        <h1 class="h2">Booking confirmed</h1>
+        <p>Your appointment is reserved. A summary is below.</p>
+    </header>
+
+    <ol th:replace="~{fragments/layout :: steps(3)}"></ol>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <section class="ab-card ab-card-body p-4 p-md-5" aria-labelledby="confirmation-heading">
+                <div class="d-flex align-items-center gap-3 mb-4">
+                    <span class="ab-confirm-icon" aria-hidden="true">&#10003;</span>
+                    <div>
+                        <h2 id="confirmation-heading" class="h4 mb-1">You're all set!</h2>
+                        <p class="ab-muted mb-0">
+                            Confirmation number <strong th:text="'AB-' + ${#numbers.formatInteger(appointment.appointmentId, 5)}">AB-00001</strong>
+                        </p>
+                    </div>
+                </div>
+                <dl class="row ab-details">
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8"><span th:replace="~{fragments/layout :: status(${appointment.status.name()})}"></span></dd>
+                    <dt class="col-sm-4">Service</dt>
+                    <dd class="col-sm-8" th:text="${appointment.serviceName}">Service</dd>
+                    <dt class="col-sm-4">Repair shop</dt>
+                    <dd class="col-sm-8" th:text="${appointment.providerName}">Provider</dd>
+                    <dt class="col-sm-4">Date</dt>
+                    <dd class="col-sm-8" th:text="${#temporals.format(appointment.startTime, 'EEEE, MMMM d, yyyy')}">Date</dd>
+                    <dt class="col-sm-4">Time</dt>
+                    <dd class="col-sm-8" th:text="${#temporals.format(appointment.startTime, 'h:mm a')} + ' – ' + ${#temporals.format(appointment.endTime, 'h:mm a')}">Time</dd>
+                    <dt class="col-sm-4">Booked</dt>
+                    <dd class="col-sm-8" th:text="${#temporals.format(appointment.createdAt, 'MMM d, yyyy h:mm a')}">Created</dd>
+                </dl>
+                <div class="d-flex flex-wrap gap-2">
+                    <a th:href="@{/customer/appointments}" class="btn btn-primary">View my appointments</a>
+                    <a th:href="@{/browse}" class="btn btn-outline-primary">Book another service</a>
+                </div>
+            </section>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

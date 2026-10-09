@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('My appointments')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container">
+    <header class="ab-page-header d-flex flex-wrap justify-content-between align-items-end gap-3">
+        <div>
+            <h1 class="h2">My appointments</h1>
+            <p>Upcoming visits, plus your past and cancelled appointments.</p>
+        </div>
+        <a th:href="@{/browse}" class="btn btn-primary">Book a new appointment</a>
+    </header>
+
+    <div th:replace="~{fragments/layout :: flash}"></div>
+
+    <section class="mb-5" aria-labelledby="upcoming-heading">
+        <h2 id="upcoming-heading" class="h5 mb-3">Upcoming</h2>
+        <div th:if="${#lists.isEmpty(appointments.upcoming)}" class="ab-card ab-empty">
+            <h3>No upcoming appointments</h3>
+            <p class="mb-3">When you book a service it will appear here.</p>
+            <a th:href="@{/browse}" class="btn btn-outline-primary">View available slots</a>
+        </div>
+        <div class="ab-card table-responsive" th:unless="${#lists.isEmpty(appointments.upcoming)}">
+            <table class="table ab-table">
+                <caption class="visually-hidden">Upcoming appointments</caption>
+                <thead>
+                <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Time</th>
+                    <th scope="col">Service</th>
+                    <th scope="col">Repair shop</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="text-end">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="appointment : ${appointments.upcoming}">
+                    <td class="fw-semibold" th:text="${#temporals.format(appointment.startTime, 'EEE, MMM d, yyyy')}">Date</td>
+                    <td th:text="${#temporals.format(appointment.startTime, 'h:mm a')} + ' – ' + ${#temporals.format(appointment.endTime, 'h:mm a')}">Time</td>
+                    <td th:text="${appointment.serviceName}">Service</td>
+                    <td th:text="${appointment.providerName}">Provider</td>
+                    <td><span th:replace="~{fragments/layout :: status(${appointment.status.name()})}"></span></td>
+                    <td class="text-end">
+                        <a th:href="@{/customer/appointments/{id}/cancel(id=${appointment.appointmentId})}"
+                           class="btn btn-sm btn-outline-danger"
+                           th:attr="aria-label='Cancel ' + ${appointment.serviceName} + ' on ' + ${#temporals.format(appointment.startTime, 'MMM d')}">Cancel</a>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section aria-labelledby="history-heading">
+        <h2 id="history-heading" class="h5 mb-3">History</h2>
+        <div th:if="${#lists.isEmpty(appointments.history)}" class="ab-card ab-empty">
+            <h3>No past appointments yet</h3>
+            <p class="mb-0">Completed and cancelled appointments will be listed here.</p>
+        </div>
+        <div class="ab-card table-responsive" th:unless="${#lists.isEmpty(appointments.history)}">
+            <table class="table ab-table">
+                <caption class="visually-hidden">Past and cancelled appointments</caption>
+                <thead>
+                <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Time</th>
+                    <th scope="col">Service</th>
+                    <th scope="col">Repair shop</th>
+                    <th scope="col">Status</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="appointment : ${appointments.history}" class="ab-row-past">
+                    <td th:text="${#temporals.format(appointment.startTime, 'EEE, MMM d, yyyy')}">Date</td>
+                    <td th:text="${#temporals.format(appointment.startTime, 'h:mm a')} + ' – ' + ${#temporals.format(appointment.endTime, 'h:mm a')}">Time</td>
+                    <td th:text="${appointment.serviceName}">Service</td>
+                    <td th:text="${appointment.providerName}">Provider</td>
+                    <td><span th:replace="~{fragments/layout :: status(${appointment.status.name()})}"></span></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

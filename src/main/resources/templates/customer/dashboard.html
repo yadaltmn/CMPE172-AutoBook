@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Dashboard')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container">
+    <header class="ab-page-header d-flex flex-wrap justify-content-between align-items-end gap-3">
+        <div>
+            <h1 class="h2" th:text="'Welcome back, ' + ${currentUser.firstName}">Welcome back</h1>
+            <p>Your upcoming service visits and quick ways to book the next one.</p>
+        </div>
+        <a th:href="@{/browse}" class="btn btn-accent">VIEW AVAILABLE SLOTS</a>
+    </header>
+
+    <div th:replace="~{fragments/layout :: flash}"></div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="ab-card ab-card-body h-100">
+                <p class="ab-eyebrow mb-2">Next appointment</p>
+                <div th:if="${nextAppointment == null}" class="ab-muted">
+                    <p class="mb-3">You have no upcoming appointments.</p>
+                    <a th:href="@{/browse}" class="btn btn-primary btn-sm">Find an open slot</a>
+                </div>
+                <div th:if="${nextAppointment != null}">
+                    <h2 class="h4 mb-1" th:text="${nextAppointment.serviceName}">Oil Change</h2>
+                    <p class="ab-muted mb-3" th:text="${nextAppointment.providerName}">Provider</p>
+                    <p class="mb-1 fw-semibold" th:text="${#temporals.format(nextAppointment.startTime, 'EEEE, MMMM d, yyyy')}">Date</p>
+                    <p class="mb-3" th:text="${#temporals.format(nextAppointment.startTime, 'h:mm a')} + ' – ' + ${#temporals.format(nextAppointment.endTime, 'h:mm a')}">Time</p>
+                    <div class="d-flex gap-2">
+                        <a th:href="@{/customer/appointments}" class="btn btn-outline-primary btn-sm">View all appointments</a>
+                        <a th:href="@{/customer/appointments/{id}/cancel(id=${nextAppointment.appointmentId})}" class="btn btn-outline-danger btn-sm">Cancel</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="ab-card ab-stat h-100">
+                <div class="ab-stat-value" th:text="${#lists.size(appointments.upcoming)}">0</div>
+                <div class="ab-stat-label">Upcoming appointments</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="ab-card ab-stat h-100">
+                <div class="ab-stat-value" th:text="${#lists.size(appointments.history)}">0</div>
+                <div class="ab-stat-label">Past and cancelled</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-end mb-3">
+        <h2 class="h5 mb-0">Open slots coming up</h2>
+        <a th:href="@{/browse}">Search all slots &rarr;</a>
+    </div>
+    <div th:if="${#lists.isEmpty(openSlots.content)}" class="ab-card ab-empty">
+        <h3>No open slots right now</h3>
+        <p class="mb-0">Providers add new availability regularly. Check back soon.</p>
+    </div>
+    <div class="row g-3">
+        <div class="col-md-6 col-lg-3" th:each="slot : ${openSlots.content}">
+            <article class="ab-card ab-card-body ab-slot d-flex flex-column">
+                <span class="ab-slot-date" th:text="${#temporals.format(slot.startTime, 'EEE, MMM d')}">Mon, Oct 12</span>
+                <div class="ab-slot-time" th:text="${#temporals.format(slot.startTime, 'h:mm a')}">9:00 AM</div>
+                <h3 class="h6 mb-0 mt-1" th:text="${slot.serviceName}">Service</h3>
+                <p class="small ab-muted" th:text="${slot.providerName}">Provider</p>
+                <a th:href="@{/customer/book/{id}(id=${slot.slotId})}" class="btn btn-primary btn-sm mt-auto">Book</a>
+            </article>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>
