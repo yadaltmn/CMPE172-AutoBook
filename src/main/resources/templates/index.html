@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Automotive service appointments')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main>
+    <section class="ab-hero">
+        <div class="container">
+            <div class="row align-items-center g-5">
+                <div class="col-lg-7">
+                    <p class="ab-eyebrow mb-3">Automotive service scheduling</p>
+                    <h1 class="mb-3">Book your next service appointment in minutes.</h1>
+                    <p class="lead mb-4">
+                        Compare open appointment times from local repair shops, choose the service you need,
+                        and lock in your slot instantly. No phone calls and no double bookings.
+                    </p>
+                    <div class="d-flex flex-wrap gap-3">
+                        <a class="btn btn-accent btn-lg px-4" th:href="@{/browse}">VIEW AVAILABLE SLOTS</a>
+                        <a class="btn btn-outline-light btn-lg px-4" th:if="${currentUser == null}" th:href="@{/login}">Sign in</a>
+                        <a class="btn btn-outline-light btn-lg px-4" th:if="${currentUser != null}" th:href="@{/dashboard}">Go to dashboard</a>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <div class="ab-hero-panel p-4">
+                        <p class="ab-eyebrow mb-3">Next open appointments</p>
+                        <div th:if="${#lists.isEmpty(nextSlots)}" class="text-white-50">
+                            No open appointments right now. Check back soon.
+                        </div>
+                        <div th:each="slot : ${nextSlots}" class="ab-mini-slot py-3 d-flex justify-content-between align-items-center gap-3">
+                            <div>
+                                <div class="fw-semibold" th:text="${slot.serviceName}">Oil Change</div>
+                                <div class="small text-white-50" th:text="${slot.providerName}">Provider</div>
+                            </div>
+                            <div class="text-end small">
+                                <div th:text="${#temporals.format(slot.startTime, 'EEE, MMM d')}">Mon, Oct 12</div>
+                                <div class="text-white-50" th:text="${#temporals.format(slot.startTime, 'h:mm a')}">9:00 AM</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="container" style="margin-top: -1.75rem;">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="ab-card ab-stat">
+                    <div class="ab-stat-value" th:text="${summary.providerCount}">2</div>
+                    <div class="ab-stat-label">Partner repair shops</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="ab-card ab-stat">
+                    <div class="ab-stat-value" th:text="${summary.serviceCount}">4</div>
+                    <div class="ab-stat-label">Service types offered</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="ab-card ab-stat">
+                    <div class="ab-stat-value" th:text="${summary.availableSlotCount}">5</div>
+                    <div class="ab-stat-label">Open appointment slots</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="container mt-5">
+        <h2 class="h4 mb-3">How it works</h2>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="ab-card ab-card-body h-100">
+                    <span class="ab-step-num mb-3">1</span>
+                    <h3 class="h6">Find a time</h3>
+                    <p class="ab-muted mb-0">Filter open slots by repair shop, service, and date.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="ab-card ab-card-body h-100">
+                    <span class="ab-step-num mb-3">2</span>
+                    <h3 class="h6">Review and confirm</h3>
+                    <p class="ab-muted mb-0">Check the details, then confirm. The slot is reserved for you right away.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="ab-card ab-card-body h-100">
+                    <span class="ab-step-num mb-3">3</span>
+                    <h3 class="h6">Manage your visit</h3>
+                    <p class="ab-muted mb-0">See upcoming visits and your history, or cancel if your plans change.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="container mt-5">
+        <div class="d-flex justify-content-between align-items-end mb-3">
+            <h2 class="h4 mb-0">Services</h2>
+            <a th:href="@{/browse}">See all open slots &rarr;</a>
+        </div>
+        <div class="row g-3">
+            <div class="col-sm-6 col-lg-3" th:each="service : ${services}">
+                <a class="text-decoration-none" th:href="@{/browse(serviceId=${service.serviceId})}">
+                    <div class="ab-card ab-card-body ab-slot">
+                        <h3 class="h6 mb-1" th:text="${service.name}">Oil Change</h3>
+                        <span class="ab-chip mb-2" th:text="${service.durationMinutes} + ' min'">45 min</span>
+                        <p class="small ab-muted mb-0 mt-2" th:text="${service.description}">Description</p>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

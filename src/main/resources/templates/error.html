@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Error')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="ab-card ab-card-body p-5 text-center">
+                <p class="ab-eyebrow mb-2" th:text="'Error ' + ${status ?: 500}">Error 500</p>
+                <h1 class="h3 mb-3"
+                    th:text="${title != null ? title : (status == 404 ? 'We could not find that page' : (status == 403 ? 'Access denied' : 'Something went wrong'))}">
+                    Something went wrong
+                </h1>
+                <p class="ab-muted mb-4"
+                   th:text="${message != null and !#strings.isEmpty(message) and title != null} ? ${message} : 'Please check the address or head back to the home page.'">
+                    Please try again.
+                </p>
+                <div class="d-flex justify-content-center gap-2">
+                    <a th:href="@{/}" class="btn btn-primary">Home</a>
+                    <a th:href="@{/browse}" class="btn btn-outline-primary">Available slots</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

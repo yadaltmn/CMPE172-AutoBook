@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Sign in')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-7 col-lg-5">
+            <div class="ab-card ab-card-body p-4 p-md-5">
+                <h1 class="h3 mb-1">Sign in</h1>
+                <p class="ab-muted mb-4">Use your AutoBook account to book or manage appointments.</p>
+
+                <div th:if="${param.error}" class="alert alert-danger" role="alert">
+                    Invalid email or password. Please try again.
+                </div>
+                <div th:if="${param.logout}" class="alert alert-success" role="status">
+                    You have been signed out.
+                </div>
+
+                <form th:action="@{/login}" method="post" novalidate>
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Email address</label>
+                        <input type="email" class="form-control form-control-lg" id="username" name="username"
+                               autocomplete="username" required autofocus placeholder="you@example.com">
+                    </div>
+                    <div class="mb-4">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control form-control-lg" id="password" name="password"
+                               autocomplete="current-password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100">Sign in</button>
+                </form>
+            </div>
+
+            <div class="ab-card ab-card-body mt-3 small">
+                <p class="fw-semibold mb-2">Development demo accounts</p>
+                <p class="ab-muted mb-2">All demo accounts use the password <code>password123</code> (development only).</p>
+                <ul class="list-unstyled mb-0">
+                    <li><span class="ab-chip me-2">Customer</span>jada.nguyen@example.com</li>
+                    <li class="mt-1"><span class="ab-chip me-2">Customer</span>alex.rivera@example.com</li>
+                    <li class="mt-1"><span class="ab-chip me-2">Provider</span>service@downtownautocare.example.com</li>
+                    <li class="mt-1"><span class="ab-chip me-2">Provider</span>hello@westsidetire.example.com</li>
+                    <li class="mt-1"><span class="ab-chip me-2">Admin</span>morgan.lee@example.com</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

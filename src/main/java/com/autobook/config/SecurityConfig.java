@@ -30,7 +30,7 @@ public class SecurityConfig {
         http.authorizeHttpRequests(auth -> auth
                 // Public pages, static assets, and the Milestone 1 JSON endpoints.
                 .requestMatchers("/", "/slots", "/login", "/browse", "/error", "/access-denied",
-                        "/css/**", "/js/**", "/images/**", "/favicon.ico").permitAll()
+                        "/css/**", "/js/**", "/images/**", "/webjars/**", "/favicon.ico").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/slots", "/api/slots/*", "/api/providers", "/api/services", "/api/csrf").permitAll()
                 // Role-restricted areas. Ownership of individual records is enforced in the service layer.
                 .requestMatchers("/customer/**", "/api/appointments/**").hasRole("CUSTOMER")
@@ -39,7 +39,13 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
         );
 
-        http.formLogin(form -> form.permitAll());
+        // Custom login page; after login users land on /dashboard, which routes them by role
+        // (or return to the page they originally requested, such as a booking link).
+        http.formLogin(form -> form
+                .loginPage("/login")
+                .defaultSuccessUrl("/dashboard")
+                .permitAll()
+        );
 
         http.logout(logout -> logout
                 .logoutSuccessUrl("/login?logout")

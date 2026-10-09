@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Available slots')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container">
+    <header class="ab-page-header">
+        <h1 class="h2">Available appointments</h1>
+        <p>Open slots from our partner shops, soonest first. Pick one to review and book.</p>
+    </header>
+
+    <ol th:replace="~{fragments/layout :: steps(1)}"></ol>
+    <div th:replace="~{fragments/layout :: flash}"></div>
+
+    <form class="ab-card ab-card-body mb-4" th:action="@{/browse}" method="get" aria-label="Filter appointments">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label for="providerId" class="form-label">Repair shop</label>
+                <select id="providerId" name="providerId" class="form-select">
+                    <option value="">All shops</option>
+                    <option th:each="provider : ${providers}" th:value="${provider.providerId}"
+                            th:selected="${provider.providerId == criteria.providerId}"
+                            th:text="${provider.name}">Provider</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="serviceId" class="form-label">Service</label>
+                <select id="serviceId" name="serviceId" class="form-select">
+                    <option value="">All services</option>
+                    <option th:each="service : ${services}" th:value="${service.serviceId}"
+                            th:selected="${service.serviceId == criteria.serviceId}"
+                            th:text="${service.name}">Service</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="date" class="form-label">Date</label>
+                <input type="date" id="date" name="date" class="form-control"
+                       th:min="${today}" th:value="${criteria.date}">
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill">Search</button>
+                <a th:href="@{/browse}" class="btn btn-outline-secondary" title="Clear filters">Clear</a>
+            </div>
+        </div>
+    </form>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <p class="ab-muted mb-0" aria-live="polite">
+            <strong th:text="${results.totalElements}">0</strong>
+            <span th:text="${results.totalElements == 1} ? 'open slot found' : 'open slots found'">open slots found</span>
+        </p>
+        <p class="ab-muted small mb-0" th:if="${results.totalPages > 1}"
+           th:text="'Page ' + ${results.page + 1} + ' of ' + ${results.totalPages}">Page 1 of 1</p>
+    </div>
+
+    <div th:if="${#lists.isEmpty(results.content)}" class="ab-card ab-empty">
+        <h3>No open slots match your search</h3>
+        <p class="mb-3">Try a different date, service, or repair shop.</p>
+        <a th:href="@{/browse}" class="btn btn-outline-primary">Show all open slots</a>
+    </div>
+
+    <div class="row g-3" th:unless="${#lists.isEmpty(results.content)}">
+        <div class="col-md-6 col-lg-4" th:each="slot : ${results.content}">
+            <article class="ab-card ab-card-body ab-slot d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="ab-slot-date" th:text="${#temporals.format(slot.startTime, 'EEEE, MMM d')}">Monday, Oct 12</span>
+                    <span th:replace="~{fragments/layout :: status('AVAILABLE')}"></span>
+                </div>
+                <div class="ab-slot-time mb-1"
+                     th:text="${#temporals.format(slot.startTime, 'h:mm a')} + ' – ' + ${#temporals.format(slot.endTime, 'h:mm a')}">9:00 AM – 9:45 AM</div>
+                <h2 class="h6 mb-1" th:text="${slot.serviceName}">Oil Change</h2>
+                <p class="ab-muted small mb-3" th:text="${slot.providerName}">Downtown Auto Care</p>
+                <div class="mt-auto">
+                    <a th:if="${currentUser == null or currentUser.role.name() == 'CUSTOMER'}"
+                       th:href="@{/customer/book/{id}(id=${slot.slotId})}" class="btn btn-primary w-100"
+                       th:attr="aria-label='Book ' + ${slot.serviceName} + ' on ' + ${#temporals.format(slot.startTime, 'MMM d h:mm a')}">
+                        Book this slot
+                    </a>
+                    <p th:if="${currentUser != null and currentUser.role.name() != 'CUSTOMER'}" class="small ab-muted mb-0">
+                        Sign in with a customer account to book.
+                    </p>
+                </div>
+            </article>
+        </div>
+    </div>
+
+    <nav th:if="${results.totalPages > 1}" class="mt-4" aria-label="Result pages">
+        <ul class="pagination justify-content-center">
+            <li class="page-item" th:classappend="${results.hasPrevious()} ? '' : 'disabled'">
+                <a class="page-link"
+                   th:href="@{/browse(providerId=${criteria.providerId}, serviceId=${criteria.serviceId}, date=${criteria.date}, page=${results.page - 1})}">Previous</a>
+            </li>
+            <li class="page-item" th:each="i : ${#numbers.sequence(0, results.totalPages - 1)}"
+                th:classappend="${i == results.page} ? 'active' : ''">
+                <a class="page-link" th:text="${i + 1}"
+                   th:attr="aria-current=${i == results.page} ? 'page' : null"
+                   th:href="@{/browse(providerId=${criteria.providerId}, serviceId=${criteria.serviceId}, date=${criteria.date}, page=${i})}">1</a>
+            </li>
+            <li class="page-item" th:classappend="${results.hasNext()} ? '' : 'disabled'">
+                <a class="page-link"
+                   th:href="@{/browse(providerId=${criteria.providerId}, serviceId=${criteria.serviceId}, date=${criteria.date}, page=${results.page + 1})}">Next</a>
+            </li>
+        </ul>
+    </nav>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>
