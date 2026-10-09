@@ -1,9 +1,11 @@
 package com.autobook.repository;
 
 import com.autobook.dto.AvailabilitySlotDto;
+import com.autobook.dto.ProviderSlotDto;
 import com.autobook.dto.SlotDetailsDto;
 import com.autobook.dto.SlotSearchCriteria;
 import com.autobook.model.SlotLock;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -13,6 +15,8 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -137,6 +141,97 @@ public class SlotRepository {
                 SET is_available = FALSE
                 WHERE slot_id = ? AND is_available = TRUE AND start_time > ?
                 """, slotId, Timestamp.valueOf(now));
+    }
+
+    public List<ProviderSlotDto> findByProviderId(long providerId, LocalDateTime now) {
+        String sql = """
+                SELECT
+                    slot.slot_id,
+                    service.service_id,
+                    service.name AS service_name,
+                    slot.start_time,
+                    slot.end_time,
+                    slot.is_available,
+                    appointment.appointment_id,
+                    appointment.status AS appointment_status,
+                    customer.first_name || ' ' || customer.last_name AS customer_name,
+                    customer.email AS customer_email,
+                    (SELECT COUNT(*) FROM appointments history WHERE history.slot_id = slot.slot_id) AS history_count
+                FROM availability_slots slot
+                JOIN services service ON service.service_id = slot.service_id
+                LEFT JOIN appointments appointment
+                    ON appointment.slot_id = slot.slot_id AND appointment.status IN ('BOOKED', 'COMPLETED')
+                LEFT JOIN users customer ON customer.user_id = appointment.user_id
+                WHERE slot.provider_id = ?
+                ORDER BY slot.start_time
+                """;
+
+        return jdbcTemplate.query(sql, (resultSet, rowNum) -> {
+            Long appointmentId = resultSet.getObject("appointment_id", Long.class);
+            String appointmentStatus = resultSet.getString("appointment_status");
+            LocalDateTime start = resultSet.getTimestamp("start_time").toLocalDateTime();
+            String state;
+            if (appointmentStatus != null) {
+                state = appointmentStatus.equals("COMPLETED") ? "COMPLETED" : "BOOKED";
+            } else if (resultSet.getBoolean("is_available") && start.isAfter(now)) {
+                state = "AVAILABLE";
+            } else {
+                state = "CLOSED";
+            }
+            return new ProviderSlotDto(
+                    resultSet.getLong("slot_id"),
+                    resultSet.getLong("service_id"),
+                    resultSet.getString("service_name"),
+                    start,
+                    resultSet.getTimestamp("end_time").toLocalDateTime(),
+                    state,
+                    appointmentId,
+                    resultSet.getString("customer_name"),
+                    resultSet.getString("customer_email"),
+                    resultSet.getLong("history_count") > 0
+            );
+        }, providerId);
+    }
+
+    /**
+     * Counts this provider's slots whose time range overlaps [start, end).
+     */
+    public long countOverlapping(long providerId, LocalDateTime start, LocalDateTime end) {
+        Long count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM availability_slots
+                WHERE provider_id = ? AND start_time < ? AND end_time > ?
+                """, Long.class, providerId, Timestamp.valueOf(end), Timestamp.valueOf(start));
+        return count == null ? 0 : count;
+    }
+
+    public long insert(long providerId, long serviceId, LocalDateTime start, LocalDateTime end) {
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        jdbcTemplate.update(connection -> {
+            PreparedStatement statement = connection.prepareStatement("""
+                    INSERT INTO availability_slots (provider_id, service_id, start_time, end_time, is_available)
+                    VALUES (?, ?, ?, ?, TRUE)
+                    """, new String[] {"slot_id"});
+            statement.setLong(1, providerId);
+            statement.setLong(2, serviceId);
+            statement.setTimestamp(3, Timestamp.valueOf(start));
+            statement.setTimestamp(4, Timestamp.valueOf(end));
+            return statement;
+        }, keyHolder);
+        return keyHolder.getKey().longValue();
+    }
+
+    public int delete(long slotId) {
+        return jdbcTemplate.update("DELETE FROM availability_slots WHERE slot_id = ?", slotId);
+    }
+
+    public int close(long slotId) {
+        return jdbcTemplate.update("UPDATE availability_slots SET is_available = FALSE WHERE slot_id = ?", slotId);
+    }
+
+    public long countAppointments(long slotId) {
+        Long count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM appointments WHERE slot_id = ?", Long.class, slotId);
+        return count == null ? 0 : count;
     }
 
     /**
