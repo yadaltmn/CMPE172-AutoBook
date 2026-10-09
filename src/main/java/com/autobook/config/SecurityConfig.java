@@ -31,7 +31,7 @@ public class SecurityConfig {
                 // Public pages, static assets, and the Milestone 1 JSON endpoints.
                 .requestMatchers("/", "/slots", "/login", "/browse", "/error", "/access-denied",
                         "/css/**", "/js/**", "/images/**", "/favicon.ico").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/slots", "/api/providers", "/api/services", "/api/csrf").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/slots", "/api/slots/*", "/api/providers", "/api/services", "/api/csrf").permitAll()
                 // Role-restricted areas. Ownership of individual records is enforced in the service layer.
                 .requestMatchers("/customer/**", "/api/appointments/**").hasRole("CUSTOMER")
                 .requestMatchers("/provider/**", "/api/provider/**").hasRole("PROVIDER")
