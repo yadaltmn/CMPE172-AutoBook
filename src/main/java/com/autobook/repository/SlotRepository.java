@@ -3,6 +3,7 @@ package com.autobook.repository;
 import com.autobook.dto.AvailabilitySlotDto;
 import com.autobook.dto.SlotDetailsDto;
 import com.autobook.dto.SlotSearchCriteria;
+import com.autobook.model.SlotLock;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -104,6 +105,38 @@ public class SlotRepository {
                 resultSet.getTimestamp("end_time").toLocalDateTime(),
                 resultSet.getBoolean("is_available")
         ), slotId).stream().findFirst();
+    }
+
+    /**
+     * Pessimistic row lock: {@code SELECT ... FOR UPDATE} blocks any other transaction that tries to
+     * lock the same slot until this transaction commits or rolls back.
+     */
+    public Optional<SlotLock> lockById(long slotId) {
+        return jdbcTemplate.query("""
+                SELECT slot_id, provider_id, service_id, start_time, end_time, is_available
+                FROM availability_slots
+                WHERE slot_id = ?
+                FOR UPDATE
+                """, (resultSet, rowNum) -> new SlotLock(
+                resultSet.getLong("slot_id"),
+                resultSet.getLong("provider_id"),
+                resultSet.getLong("service_id"),
+                resultSet.getTimestamp("start_time").toLocalDateTime(),
+                resultSet.getTimestamp("end_time").toLocalDateTime(),
+                resultSet.getBoolean("is_available")
+        ), slotId).stream().findFirst();
+    }
+
+    /**
+     * Atomic conditional update: flips the slot to unavailable only if it is still open and in the
+     * future. Returns the number of rows changed, so 0 means another booking already claimed it.
+     */
+    public int claimIfAvailable(long slotId, LocalDateTime now) {
+        return jdbcTemplate.update("""
+                UPDATE availability_slots
+                SET is_available = FALSE
+                WHERE slot_id = ? AND is_available = TRUE AND start_time > ?
+                """, slotId, Timestamp.valueOf(now));
     }
 
     /**
