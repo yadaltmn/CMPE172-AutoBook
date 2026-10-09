@@ -1,3 +1,4 @@
+-- All seeded passwords are the development-only password "password123" (BCrypt hashed).
 INSERT INTO users (first_name, last_name, email, password, role)
 VALUES
     ('Jada', 'Nguyen', 'jada.nguyen@example.com',
@@ -7,11 +8,17 @@ VALUES
      '$2a$10$d8A/7t3fhv0uxuSlwJ5N8uUcD3SjUW/2HbuzMwG2Da70N6MZcr5dG', 'CUSTOMER'),
 
     ('Morgan', 'Lee', 'morgan.lee@example.com',
-     '$2a$10$d8A/7t3fhv0uxuSlwJ5N8uUcD3SjUW/2HbuzMwG2Da70N6MZcr5dG', 'ADMIN');
-     
-INSERT INTO providers (name, email, phone) VALUES
-    ('Downtown Auto Care', 'service@downtownautocare.example.com', '408-555-0101'),
-    ('Westside Tire and Inspection', 'hello@westsidetire.example.com', '408-555-0112');
+     '$2a$10$d8A/7t3fhv0uxuSlwJ5N8uUcD3SjUW/2HbuzMwG2Da70N6MZcr5dG', 'ADMIN'),
+
+    ('Sam', 'Patel', 'service@downtownautocare.example.com',
+     '$2a$10$d8A/7t3fhv0uxuSlwJ5N8uUcD3SjUW/2HbuzMwG2Da70N6MZcr5dG', 'PROVIDER'),
+
+    ('Riley', 'Chen', 'hello@westsidetire.example.com',
+     '$2a$10$d8A/7t3fhv0uxuSlwJ5N8uUcD3SjUW/2HbuzMwG2Da70N6MZcr5dG', 'PROVIDER');
+
+INSERT INTO providers (user_id, name, email, phone) VALUES
+    (4, 'Downtown Auto Care', 'service@downtownautocare.example.com', '408-555-0101'),
+    (5, 'Westside Tire and Inspection', 'hello@westsidetire.example.com', '408-555-0112');
 
 INSERT INTO services (name, description, duration_minutes) VALUES
     ('Oil Change', 'Engine oil and filter replacement with basic fluid check.', 45),
@@ -19,13 +26,20 @@ INSERT INTO services (name, description, duration_minutes) VALUES
     ('Vehicle Diagnostics', 'Diagnostic scan and technician review for warning lights or performance issues.', 90),
     ('Tire Service', 'Tire rotation, pressure check, and tread inspection.', 45);
 
+-- Slot times are relative to the day the application starts so the demo always has upcoming slots.
 INSERT INTO availability_slots (provider_id, service_id, start_time, end_time, is_available) VALUES
-    (1, 1, '2026-10-05 09:00:00', '2026-10-05 09:45:00', TRUE),
-    (1, 2, '2026-10-05 10:30:00', '2026-10-05 11:30:00', TRUE),
-    (1, 3, '2026-10-06 13:00:00', '2026-10-06 14:30:00', TRUE),
-    (2, 4, '2026-10-07 09:30:00', '2026-10-07 10:15:00', TRUE),
-    (2, 2, '2026-10-07 11:00:00', '2026-10-07 12:00:00', TRUE),
-    (2, 1, '2026-10-08 15:00:00', '2026-10-08 15:45:00', FALSE);
+    (1, 1, DATEADD('MINUTE', 540, DATEADD('DAY', 1, CAST(CURRENT_DATE AS TIMESTAMP))),
+           DATEADD('MINUTE', 585, DATEADD('DAY', 1, CAST(CURRENT_DATE AS TIMESTAMP))), TRUE),
+    (1, 2, DATEADD('MINUTE', 630, DATEADD('DAY', 1, CAST(CURRENT_DATE AS TIMESTAMP))),
+           DATEADD('MINUTE', 690, DATEADD('DAY', 1, CAST(CURRENT_DATE AS TIMESTAMP))), TRUE),
+    (1, 3, DATEADD('MINUTE', 780, DATEADD('DAY', 2, CAST(CURRENT_DATE AS TIMESTAMP))),
+           DATEADD('MINUTE', 870, DATEADD('DAY', 2, CAST(CURRENT_DATE AS TIMESTAMP))), TRUE),
+    (2, 4, DATEADD('MINUTE', 570, DATEADD('DAY', 3, CAST(CURRENT_DATE AS TIMESTAMP))),
+           DATEADD('MINUTE', 615, DATEADD('DAY', 3, CAST(CURRENT_DATE AS TIMESTAMP))), TRUE),
+    (2, 2, DATEADD('MINUTE', 660, DATEADD('DAY', 3, CAST(CURRENT_DATE AS TIMESTAMP))),
+           DATEADD('MINUTE', 720, DATEADD('DAY', 3, CAST(CURRENT_DATE AS TIMESTAMP))), TRUE),
+    (2, 1, DATEADD('MINUTE', 900, DATEADD('DAY', 4, CAST(CURRENT_DATE AS TIMESTAMP))),
+           DATEADD('MINUTE', 945, DATEADD('DAY', 4, CAST(CURRENT_DATE AS TIMESTAMP))), FALSE);
 
 INSERT INTO appointments (user_id, provider_id, service_id, slot_id, status, created_at) VALUES
-    (1, 2, 1, 6, 'BOOKED', '2026-09-24 20:30:00');
+    (1, 2, 1, 6, 'BOOKED', DATEADD('DAY', -1, CURRENT_TIMESTAMP));
