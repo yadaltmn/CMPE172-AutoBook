@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Edit provider')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <section class="ab-card ab-card-body p-4 p-md-5" aria-labelledby="edit-heading">
+                <p class="ab-eyebrow mb-1">Administration</p>
+                <h1 id="edit-heading" class="h3 mb-1">Edit provider</h1>
+                <p class="ab-muted mb-4" th:text="${provider.email}">email</p>
+
+                <form th:action="@{/admin/providers/{id}(id=${provider.providerId})}" th:object="${providerForm}"
+                      method="post" novalidate data-submit-once>
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Business name</label>
+                        <input type="text" id="name" th:field="*{name}" class="form-control" maxlength="150" required
+                               th:classappend="${#fields.hasErrors('name')} ? 'is-invalid'" aria-describedby="nameFeedback">
+                        <div id="nameFeedback" class="invalid-feedback" th:text="'Business name ' + ${#fields.errors('name')[0]}"
+                             th:if="${#fields.hasErrors('name')}">Error</div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="phone" class="form-label">Phone</label>
+                        <input type="tel" id="phone" th:field="*{phone}" class="form-control" placeholder="408-555-0100"
+                               th:classappend="${#fields.hasErrors('phone')} ? 'is-invalid'" aria-describedby="phoneFeedback">
+                        <div id="phoneFeedback" class="invalid-feedback" th:text="'Phone ' + ${#fields.errors('phone')[0]}"
+                             th:if="${#fields.hasErrors('phone')}">Error</div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary" data-busy-text="Saving...">Save changes</button>
+                        <a th:href="@{/admin/dashboard}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </section>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

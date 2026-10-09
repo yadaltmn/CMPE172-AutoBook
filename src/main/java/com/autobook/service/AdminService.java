@@ -1,9 +1,11 @@
 package com.autobook.service;
 
+import com.autobook.dto.AppointmentDto;
 import com.autobook.dto.ProviderDto;
 import com.autobook.exception.InvalidRequestException;
 import com.autobook.exception.ResourceNotFoundException;
 import com.autobook.model.AppUser;
+import com.autobook.repository.AppointmentRepository;
 import com.autobook.repository.ProviderRepository;
 import com.autobook.repository.UserRepository;
 import java.util.List;
@@ -15,10 +17,22 @@ public class AdminService {
 
     private final ProviderRepository providerRepository;
     private final UserRepository userRepository;
+    private final AppointmentRepository appointmentRepository;
 
-    public AdminService(ProviderRepository providerRepository, UserRepository userRepository) {
+    public AdminService(ProviderRepository providerRepository, UserRepository userRepository,
+                        AppointmentRepository appointmentRepository) {
         this.providerRepository = providerRepository;
         this.userRepository = userRepository;
+        this.appointmentRepository = appointmentRepository;
+    }
+
+    public ProviderDto getProvider(long providerId) {
+        return providerRepository.findById(providerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Provider " + providerId + " was not found."));
+    }
+
+    public List<AppointmentDto> getAppointments() {
+        return appointmentRepository.findAll();
     }
 
     public List<ProviderDto> getProviders() {

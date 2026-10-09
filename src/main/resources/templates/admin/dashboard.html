@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Admin dashboard')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container">
+    <header class="ab-page-header">
+        <p class="ab-eyebrow mb-1">Administration</p>
+        <h1 class="h2">Admin dashboard</h1>
+        <p>Manage provider information and review accounts and appointments across AutoBook.</p>
+    </header>
+
+    <div th:replace="~{fragments/layout :: flash}"></div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-sm-4">
+            <div class="ab-card ab-stat">
+                <div class="ab-stat-value" th:text="${#lists.size(providers)}">0</div>
+                <div class="ab-stat-label">Providers</div>
+            </div>
+        </div>
+        <div class="col-sm-4">
+            <div class="ab-card ab-stat">
+                <div class="ab-stat-value" th:text="${#lists.size(users)}">0</div>
+                <div class="ab-stat-label">User accounts</div>
+            </div>
+        </div>
+        <div class="col-sm-4">
+            <div class="ab-card ab-stat">
+                <div class="ab-stat-value" th:text="${#lists.size(appointments)}">0</div>
+                <div class="ab-stat-label">Appointments (all statuses)</div>
+            </div>
+        </div>
+    </div>
+
+    <section class="mb-5" aria-labelledby="providers-heading">
+        <h2 id="providers-heading" class="h5 mb-3">Providers</h2>
+        <div class="ab-card table-responsive">
+            <table class="table ab-table">
+                <caption class="visually-hidden">Provider businesses</caption>
+                <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Phone</th>
+                    <th scope="col">Login linked</th>
+                    <th scope="col" class="text-end">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="provider : ${providers}">
+                    <td class="fw-semibold" th:text="${provider.name}">Name</td>
+                    <td th:text="${provider.email}">Email</td>
+                    <td th:text="${provider.phone ?: '—'}">Phone</td>
+                    <td th:text="${provider.userId != null} ? 'Yes' : 'No'">Yes</td>
+                    <td class="text-end">
+                        <a th:href="@{/admin/providers/{id}/edit(id=${provider.providerId})}" class="btn btn-sm btn-outline-primary"
+                           th:attr="aria-label='Edit ' + ${provider.name}">Edit</a>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="mb-5" aria-labelledby="appointments-heading">
+        <h2 id="appointments-heading" class="h5 mb-3">Appointments</h2>
+        <div th:if="${#lists.isEmpty(appointments)}" class="ab-card ab-empty"><h3>No appointments yet</h3></div>
+        <div class="ab-card table-responsive" th:unless="${#lists.isEmpty(appointments)}">
+            <table class="table ab-table">
+                <caption class="visually-hidden">All appointments</caption>
+                <thead>
+                <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Service</th>
+                    <th scope="col">Provider</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">Status</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="appointment : ${appointments}">
+                    <td th:text="${#temporals.format(appointment.startTime, 'MMM d, yyyy h:mm a')}">Date</td>
+                    <td th:text="${appointment.serviceName}">Service</td>
+                    <td th:text="${appointment.providerName}">Provider</td>
+                    <td th:text="${appointment.customerName}">Customer</td>
+                    <td><span th:replace="~{fragments/layout :: status(${appointment.status.name()})}"></span></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section aria-labelledby="users-heading">
+        <h2 id="users-heading" class="h5 mb-3">User accounts</h2>
+        <div class="ab-card table-responsive">
+            <table class="table ab-table">
+                <caption class="visually-hidden">User accounts</caption>
+                <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Role</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="user : ${users}">
+                    <td th:text="${user.fullName()}">Name</td>
+                    <td th:text="${user.email}">Email</td>
+                    <td><span class="ab-chip" th:text="${#strings.capitalize(#strings.toLowerCase(user.role.name()))}">Role</span></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>

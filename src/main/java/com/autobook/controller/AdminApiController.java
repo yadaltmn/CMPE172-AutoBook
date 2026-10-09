@@ -1,5 +1,6 @@
 package com.autobook.controller;
 
+import com.autobook.dto.AppointmentDto;
 import com.autobook.dto.ProviderDto;
 import com.autobook.dto.ProviderUpdateRequest;
 import com.autobook.model.AppUser;
@@ -31,6 +32,11 @@ public class AdminApiController {
     @PutMapping("/providers/{providerId}")
     public ProviderDto updateProvider(@PathVariable long providerId, @Valid @RequestBody ProviderUpdateRequest request) {
         return adminService.updateProvider(providerId, request.name(), request.phone());
+    }
+
+    @GetMapping("/appointments")
+    public List<AppointmentDto> appointments() {
+        return adminService.getAppointments();
     }
 
     @GetMapping("/users")
