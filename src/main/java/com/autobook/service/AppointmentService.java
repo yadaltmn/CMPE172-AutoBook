@@ -9,6 +9,7 @@ import com.autobook.exception.ResourceNotFoundException;
 import com.autobook.model.AppUser;
 import com.autobook.model.AppointmentStatus;
 import com.autobook.model.SlotLock;
+import com.autobook.notification.BookingNotifications;
 import com.autobook.repository.AppointmentRepository;
 import com.autobook.repository.SlotRepository;
 import java.time.Clock;
@@ -32,11 +33,14 @@ public class AppointmentService {
 
     private final AppointmentRepository appointmentRepository;
     private final SlotRepository slotRepository;
+    private final BookingNotifications bookingNotifications;
     private final Clock clock;
 
-    public AppointmentService(AppointmentRepository appointmentRepository, SlotRepository slotRepository, Clock clock) {
+    public AppointmentService(AppointmentRepository appointmentRepository, SlotRepository slotRepository,
+                              BookingNotifications bookingNotifications, Clock clock) {
         this.appointmentRepository = appointmentRepository;
         this.slotRepository = slotRepository;
+        this.bookingNotifications = bookingNotifications;
         this.clock = clock;
     }
 
@@ -94,9 +98,13 @@ public class AppointmentService {
         }
         slotRepository.reopen(appointment.slotId());
 
+        AppointmentDto cancelled = appointmentRepository.findById(appointmentId).orElseThrow();
+        // Queued in this transaction; sent only after commit (see NotificationDispatcher).
+        bookingNotifications.bookingCancelled(cancelled);
+
         log.info("Customer {} cancelled appointment {} and reopened slot {}",
                 customer.userId(), appointmentId, appointment.slotId());
-        return appointmentRepository.findById(appointmentId).orElseThrow();
+        return cancelled;
     }
 
     private boolean isUpcoming(AppointmentDto appointment, LocalDateTime now) {

@@ -10,6 +10,7 @@ import com.autobook.model.AppUser;
 import com.autobook.model.AppointmentStatus;
 import com.autobook.model.SlotLock;
 import com.autobook.model.UserRole;
+import com.autobook.notification.BookingNotifications;
 import com.autobook.repository.AppointmentRepository;
 import com.autobook.repository.SlotRepository;
 import java.time.Clock;
@@ -32,6 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
  *     <li>A unique constraint on the active appointment per slot rejects any duplicate that slips through.</li>
  * </ol>
  * If any step fails the whole transaction rolls back, so the slot and appointment tables never disagree.
+ *
+ * <p>Milestone 3: the confirmation notification is written to the transactional outbox inside the same
+ * transaction and is only sent to the notification service after the booking commits.
  */
 @Service
 public class BookingService {
@@ -40,11 +44,14 @@ public class BookingService {
 
     private final SlotRepository slotRepository;
     private final AppointmentRepository appointmentRepository;
+    private final BookingNotifications bookingNotifications;
     private final Clock clock;
 
-    public BookingService(SlotRepository slotRepository, AppointmentRepository appointmentRepository, Clock clock) {
+    public BookingService(SlotRepository slotRepository, AppointmentRepository appointmentRepository,
+                          BookingNotifications bookingNotifications, Clock clock) {
         this.slotRepository = slotRepository;
         this.appointmentRepository = appointmentRepository;
+        this.bookingNotifications = bookingNotifications;
         this.clock = clock;
     }
 
@@ -77,8 +84,12 @@ public class BookingService {
             long appointmentId = appointmentRepository.insert(
                     customer.userId(), slot.providerId(), slot.serviceId(), slotId, AppointmentStatus.BOOKED, now);
 
+            AppointmentDto appointment = appointmentRepository.findById(appointmentId).orElseThrow();
+            // Queued in this transaction; sent only after commit (see NotificationDispatcher).
+            bookingNotifications.bookingConfirmed(appointment);
+
             log.info("Customer {} booked slot {} as appointment {}", customer.userId(), slotId, appointmentId);
-            return appointmentRepository.findById(appointmentId).orElseThrow();
+            return appointment;
         } catch (DuplicateKeyException | ConcurrencyFailureException ex) {
             // Last line of defence: the database constraint or lock manager rejected a competing booking.
             log.info("Booking conflict for slot {}: {}", slotId, ex.getClass().getSimpleName());
