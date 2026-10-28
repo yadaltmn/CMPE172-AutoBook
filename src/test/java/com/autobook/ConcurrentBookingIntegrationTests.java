@@ -39,11 +39,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Proves that simultaneous booking attempts for the same slot produce exactly one appointment.
- * This class commits real transactions, so it runs against its own in-memory database.
+ * This class commits real transactions, so it runs against its own PostgreSQL test container.
  */
 @SpringBootTest(
 		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-		properties = "spring.datasource.url=jdbc:h2:mem:autobook_concurrency;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=10000")
+		properties = "spring.datasource.url=jdbc:tc:postgresql:16-alpine:///autobook_concurrency")
 class ConcurrentBookingIntegrationTests {
 
 	private static final String PASSWORD = "password123";
