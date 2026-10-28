@@ -16,6 +16,7 @@ import org.springframework.security.web.access.AccessDeniedHandlerImpl;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.AnyRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 @Configuration
@@ -25,7 +26,12 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http)
             throws Exception {
 
-        RequestMatcher apiRequests = PathPatternRequestMatcher.withDefaults().matcher("/api/**");
+        RequestMatcher apiRequests = new OrRequestMatcher(
+                PathPatternRequestMatcher.withDefaults().matcher("/api/**"),
+                PathPatternRequestMatcher.withDefaults().matcher("/mock-notifications/**"));
+        // Server-to-server call from NotificationGateway: no browser session, so no CSRF token.
+        RequestMatcher notificationDelivery = PathPatternRequestMatcher.withDefaults()
+                .matcher(HttpMethod.POST, "/mock-notifications/api/notifications");
 
         http.authorizeHttpRequests(auth -> auth
                 // Public pages, static assets, and the Milestone 1 JSON endpoints.
@@ -36,8 +42,14 @@ public class SecurityConfig {
                 .requestMatchers("/customer/**", "/api/appointments/**").hasRole("CUSTOMER")
                 .requestMatchers("/provider/**", "/api/provider/**").hasRole("PROVIDER")
                 .requestMatchers("/admin/**", "/api/admin/**").hasRole("ADMIN")
+                // Mock external notification service: delivery is open to AutoBook's gateway,
+                // inspecting deliveries and injecting faults is for admins only.
+                .requestMatchers(notificationDelivery).permitAll()
+                .requestMatchers("/mock-notifications/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
         );
+
+        http.csrf(csrf -> csrf.ignoringRequestMatchers(notificationDelivery));
 
         // Custom login page; after login users land on /dashboard, which routes them by role
         // (or return to the page they originally requested, such as a booking link).
