@@ -36,7 +36,7 @@ availability management, a Thymeleaf/Bootstrap website, and an integration test 
 
 ## Technologies
 
-- Java 17, Spring Boot 4.1.1, Maven Wrapper
+- Java 21, Spring Boot 4.1.1, Maven Wrapper
 - Spring Web MVC, Spring Security, Spring JDBC (`JdbcTemplate`), Bean Validation
 - H2 in-memory database
 - Thymeleaf, Bootstrap 5.3 (bundled as a WebJar, so the site works offline)
@@ -46,7 +46,7 @@ availability management, a Thymeleaf/Bootstrap website, and an integration test 
 
 ## Requirements
 
-- JDK 17 or newer (`java -version`)
+- JDK 21 (`java -version` must report 21)
 - No separate database install; H2 runs in memory. Maven is provided by the wrapper (`./mvnw`).
 
 ## How to Run
