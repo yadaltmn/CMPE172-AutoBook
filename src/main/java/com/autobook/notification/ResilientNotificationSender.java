@@ -1,6 +1,7 @@
 package com.autobook.notification;
 
 import java.time.Duration;
+import com.autobook.observability.NotificationMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -20,10 +21,13 @@ public class ResilientNotificationSender {
 
     private final NotificationGateway gateway;
     private final NotificationProperties properties;
+    private final NotificationMetrics metrics;
 
-    public ResilientNotificationSender(NotificationGateway gateway, NotificationProperties properties) {
+    public ResilientNotificationSender(NotificationGateway gateway, NotificationProperties properties,
+                                       NotificationMetrics metrics) {
         this.gateway = gateway;
         this.properties = properties;
+        this.metrics = metrics;
     }
 
     public DeliveryResult send(NotificationRequest request) {
@@ -43,6 +47,7 @@ public class ResilientNotificationSender {
                 }
                 log.warn("Notification {} attempt {}/{} failed: {} Retrying in {} ms",
                         request.idempotencyKey(), attempt, maxAttempts, ex.getMessage(), backoff.toMillis());
+                metrics.retried();
                 sleep(backoff);
                 backoff = nextBackoff(backoff);
             }

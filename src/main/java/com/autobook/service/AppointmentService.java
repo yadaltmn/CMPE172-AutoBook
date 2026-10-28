@@ -10,6 +10,7 @@ import com.autobook.model.AppUser;
 import com.autobook.model.AppointmentStatus;
 import com.autobook.model.SlotLock;
 import com.autobook.notification.BookingNotifications;
+import com.autobook.observability.BookingMetrics;
 import com.autobook.repository.AppointmentRepository;
 import com.autobook.repository.SlotRepository;
 import java.time.Clock;
@@ -34,13 +35,15 @@ public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final SlotRepository slotRepository;
     private final BookingNotifications bookingNotifications;
+    private final BookingMetrics bookingMetrics;
     private final Clock clock;
 
     public AppointmentService(AppointmentRepository appointmentRepository, SlotRepository slotRepository,
-                              BookingNotifications bookingNotifications, Clock clock) {
+                              BookingNotifications bookingNotifications, BookingMetrics bookingMetrics, Clock clock) {
         this.appointmentRepository = appointmentRepository;
         this.slotRepository = slotRepository;
         this.bookingNotifications = bookingNotifications;
+        this.bookingMetrics = bookingMetrics;
         this.clock = clock;
     }
 
@@ -101,6 +104,7 @@ public class AppointmentService {
         AppointmentDto cancelled = appointmentRepository.findById(appointmentId).orElseThrow();
         // Queued in this transaction; sent only after commit (see NotificationDispatcher).
         bookingNotifications.bookingCancelled(cancelled);
+        bookingMetrics.appointmentCancelled();
 
         log.info("Customer {} cancelled appointment {} and reopened slot {}",
                 customer.userId(), appointmentId, appointment.slotId());

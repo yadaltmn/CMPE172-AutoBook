@@ -11,6 +11,8 @@ import com.autobook.model.AppointmentStatus;
 import com.autobook.model.SlotLock;
 import com.autobook.model.UserRole;
 import com.autobook.notification.BookingNotifications;
+import com.autobook.observability.BookingMetrics;
+import io.micrometer.core.instrument.Timer;
 import com.autobook.repository.AppointmentRepository;
 import com.autobook.repository.SlotRepository;
 import java.time.Clock;
@@ -45,18 +47,35 @@ public class BookingService {
     private final SlotRepository slotRepository;
     private final AppointmentRepository appointmentRepository;
     private final BookingNotifications bookingNotifications;
+    private final BookingMetrics bookingMetrics;
     private final Clock clock;
 
     public BookingService(SlotRepository slotRepository, AppointmentRepository appointmentRepository,
-                          BookingNotifications bookingNotifications, Clock clock) {
+                          BookingNotifications bookingNotifications, BookingMetrics bookingMetrics, Clock clock) {
         this.slotRepository = slotRepository;
         this.appointmentRepository = appointmentRepository;
         this.bookingNotifications = bookingNotifications;
+        this.bookingMetrics = bookingMetrics;
         this.clock = clock;
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public AppointmentDto book(AppUser customer, BookingRequest request) {
+        Timer.Sample sample = bookingMetrics.startBooking();
+        try {
+            AppointmentDto appointment = bookInTransaction(customer, request);
+            bookingMetrics.bookingSucceeded(sample);
+            return appointment;
+        } catch (BookingConflictException ex) {
+            bookingMetrics.bookingConflicted(sample);
+            throw ex;
+        } catch (RuntimeException ex) {
+            bookingMetrics.bookingRejected(sample);
+            throw ex;
+        }
+    }
+
+    private AppointmentDto bookInTransaction(AppUser customer, BookingRequest request) {
         if (customer.role() != UserRole.CUSTOMER) {
             throw new ForbiddenOperationException("Only customer accounts can book appointments.");
         }
@@ -92,7 +111,7 @@ public class BookingService {
             return appointment;
         } catch (DuplicateKeyException | ConcurrencyFailureException ex) {
             // Last line of defence: the database constraint or lock manager rejected a competing booking.
-            log.info("Booking conflict for slot {}: {}", slotId, ex.getClass().getSimpleName());
+            log.warn("Booking conflict for slot {} detected by the database: {}", slotId, ex.getClass().getSimpleName());
             throw new BookingConflictException("Sorry, this appointment slot has already been booked.");
         }
     }

@@ -1,5 +1,6 @@
 package com.autobook.notification;
 
+import com.autobook.observability.NotificationMetrics;
 import jakarta.annotation.PreDestroy;
 import java.time.Clock;
 import java.time.Duration;
@@ -41,14 +42,16 @@ public class NotificationDispatcher {
     private final NotificationOutboxRepository outboxRepository;
     private final ResilientNotificationSender sender;
     private final NotificationProperties properties;
+    private final NotificationMetrics metrics;
     private final Clock clock;
     private final ExecutorService executor;
 
     public NotificationDispatcher(NotificationOutboxRepository outboxRepository, ResilientNotificationSender sender,
-                                  NotificationProperties properties, Clock clock) {
+                                  NotificationProperties properties, NotificationMetrics metrics, Clock clock) {
         this.outboxRepository = outboxRepository;
         this.sender = sender;
         this.properties = properties;
+        this.metrics = metrics;
         this.clock = clock;
         AtomicInteger threadNumber = new AtomicInteger();
         this.executor = Executors.newFixedThreadPool(2, runnable -> {
@@ -116,6 +119,7 @@ public class NotificationDispatcher {
                     LocalDateTime.now(clock));
             log.info("Notification {} for appointment {} sent (outbox {}, attempts {}, duplicate={})",
                     entry.type(), entry.appointmentId(), entry.outboxId(), result.attempts(), result.receipt().duplicate());
+            metrics.roundFinished("sent");
             return DeliveryOutcome.SENT;
         } catch (ResilientNotificationSender.DeliveryFailedException ex) {
             return fallback(entry, ex);
@@ -129,6 +133,7 @@ public class NotificationDispatcher {
             log.error("Notification {} for appointment {} FAILED after {} round(s): {} The appointment is kept;"
                             + " follow up manually (outbox {}).",
                     entry.type(), entry.appointmentId(), round, ex.getMessage(), entry.outboxId());
+            metrics.roundFinished("failed");
             return DeliveryOutcome.FAILED;
         }
         Duration wait = properties.redeliveryDelay().multipliedBy(round);
@@ -137,6 +142,7 @@ public class NotificationDispatcher {
         log.warn("Notification {} for appointment {} not delivered (round {}/{}): {} Kept in outbox {}, next try in {} s",
                 entry.type(), entry.appointmentId(), round, properties.maxDeliveryRounds(), ex.getMessage(),
                 entry.outboxId(), wait.toSeconds());
+        metrics.roundFinished("retry_scheduled");
         return DeliveryOutcome.RETRY_SCHEDULED;
     }
 

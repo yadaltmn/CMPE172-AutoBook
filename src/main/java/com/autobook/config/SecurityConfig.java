@@ -28,7 +28,8 @@ public class SecurityConfig {
 
         RequestMatcher apiRequests = new OrRequestMatcher(
                 PathPatternRequestMatcher.withDefaults().matcher("/api/**"),
-                PathPatternRequestMatcher.withDefaults().matcher("/mock-notifications/**"));
+                PathPatternRequestMatcher.withDefaults().matcher("/mock-notifications/**"),
+                PathPatternRequestMatcher.withDefaults().matcher("/metrics/**"));
         // Server-to-server call from NotificationGateway: no browser session, so no CSRF token.
         RequestMatcher notificationDelivery = PathPatternRequestMatcher.withDefaults()
                 .matcher(HttpMethod.POST, "/mock-notifications/api/notifications");
@@ -44,6 +45,9 @@ public class SecurityConfig {
                 .requestMatchers("/admin/**", "/api/admin/**").hasRole("ADMIN")
                 // Mock external notification service: delivery is open to AutoBook's gateway,
                 // inspecting deliveries and injecting faults is for admins only.
+                // Health and info are public for load balancers and Docker; metrics are admin only.
+                .requestMatchers(HttpMethod.GET, "/health", "/health/**", "/info").permitAll()
+                .requestMatchers("/metrics", "/metrics/**").hasRole("ADMIN")
                 .requestMatchers(notificationDelivery).permitAll()
                 .requestMatchers("/mock-notifications/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
