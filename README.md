@@ -123,8 +123,9 @@ Docker must be running; the tests start PostgreSQL 16 containers with Testcontai
 ./mvnw clean verify
 ```
 
-The suite has 114 tests in 15 test classes (see [Automated tests](#automated-tests)). GitHub Actions runs the same
-command plus the Docker Compose smoke test on every push (`.github/workflows/ci.yml`).
+The suite has 114 tests in 15 test classes (see [Automated tests](#automated-tests)); all of them pass in GitHub
+Actions on Java 21 and PostgreSQL 16. CI runs the same command plus the Docker Compose smoke test on every push
+(`.github/workflows/ci.yml`).
 
 ## Test Login Credentials
 
@@ -413,7 +414,8 @@ src/test/            Integration tests and test configuration (Testcontainers Po
 scripts/             compose-smoke-test.sh
 Dockerfile, docker-compose.yml, .env.example, .github/workflows/ci.yml
 docs/
-  Milestone reports, diagrams/, screenshots/, code walkthrough scripts
+  AutoBook_Milestone_3_Report.pdf (+ .html source), diagrams/distribution-diagram.svg/.png,
+  Milestone_3_Code_Walkthrough_Script.md, and the Milestone 1 and 2 reports, diagrams, and screenshots
 ```
 
 ## Inspecting the Database

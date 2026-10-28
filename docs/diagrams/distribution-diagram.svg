@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 720" width="1120" height="720" font-family="Times New Roman, Times, serif" font-size="14" fill="#000">
+  <title>AutoBook Milestone 3 distribution diagram</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+    </marker>
+    <marker id="arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10" fill="none" stroke="#000" stroke-width="1.5"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1120" height="720" fill="#fff"/>
+
+  <text x="560" y="30" text-anchor="middle" font-size="20" font-weight="bold">AutoBook Milestone 3: Client → Appointment Scheduler → Notification Service</text>
+
+  <!-- Client -->
+  <rect x="20" y="70" width="180" height="120" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="110" y="98" text-anchor="middle" font-weight="bold" font-size="16">Client</text>
+  <text x="110" y="122" text-anchor="middle">Browser (Thymeleaf)</text>
+  <text x="110" y="142" text-anchor="middle">or API client</text>
+  <text x="110" y="166" text-anchor="middle" font-style="italic" font-size="13">customer, provider, admin</text>
+
+  <!-- Scheduler boundary -->
+  <rect x="250" y="55" width="520" height="545" fill="none" stroke="#000" stroke-width="2.5"/>
+  <text x="510" y="80" text-anchor="middle" font-weight="bold" font-size="16">AutoBook Appointment Scheduler (Spring Boot, Java 21)</text>
+  <text x="510" y="98" text-anchor="middle" font-size="12" font-style="italic">Docker container "app"</text>
+
+  <rect x="275" y="112" width="470" height="44" fill="#fff" stroke="#000"/>
+  <text x="510" y="132" text-anchor="middle">Spring Security · controllers (web pages and /api)</text>
+  <text x="510" y="149" text-anchor="middle" font-size="12">GET /health (db check) · GET /metrics (booking metrics)</text>
+
+  <rect x="275" y="172" width="470" height="118" fill="#fff" stroke="#000"/>
+  <text x="510" y="192" text-anchor="middle" font-weight="bold">One database transaction (@Transactional)</text>
+  <text x="290" y="214">BookingService.book() / AppointmentService.cancel()</text>
+  <text x="300" y="234" font-size="13">a. SELECT … FOR UPDATE on the slot (row lock)</text>
+  <text x="300" y="252" font-size="13">b. claim slot, INSERT/UPDATE appointment</text>
+  <text x="300" y="270" font-size="13">c. BookingNotifications: INSERT into notification_outbox (PENDING)</text>
+  <text x="300" y="286" font-size="12" font-style="italic">   commit → publish NotificationEnqueuedEvent</text>
+
+  <rect x="275" y="308" width="470" height="62" fill="#fff" stroke="#000"/>
+  <text x="510" y="328" text-anchor="middle" font-weight="bold">NotificationDispatcher</text>
+  <text x="510" y="346" text-anchor="middle" font-size="13">@TransactionalEventListener(AFTER_COMMIT) → background thread</text>
+  <text x="510" y="363" text-anchor="middle" font-size="13">@Scheduled retry job for due PENDING rows (also after restart)</text>
+
+  <rect x="275" y="388" width="470" height="62" fill="#fff" stroke="#000"/>
+  <text x="510" y="408" text-anchor="middle" font-weight="bold">ResilientNotificationSender</text>
+  <text x="510" y="426" text-anchor="middle" font-size="13">max 3 attempts · backoff 200 ms → 400 ms (cap 2 s)</text>
+  <text x="510" y="443" text-anchor="middle" font-size="13">fallback: keep PENDING, retry later; FAILED after 5 rounds</text>
+
+  <rect x="275" y="468" width="470" height="62" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="510" y="488" text-anchor="middle" font-weight="bold">NotificationGateway (HttpNotificationGateway)</text>
+  <text x="510" y="506" text-anchor="middle" font-size="13">coarse-grained: send(NotificationRequest) → NotificationReceipt</text>
+  <text x="510" y="523" text-anchor="middle" font-size="13">connect/read timeout 2 s · 5xx/timeout = retryable, 4xx = not</text>
+
+  <text x="510" y="560" text-anchor="middle" font-size="13" font-style="italic">Distribution boundary: the only path from AutoBook to the notification service</text>
+  <line x1="275" y1="572" x2="745" y2="572" stroke="#000" stroke-width="1.5" stroke-dasharray="8 5"/>
+
+  <!-- Database -->
+  <path d="M275,625 a115,14 0 0,0 230,0 v62 a115,14 0 0,1 -230,0 z" fill="#fff" stroke="#000" stroke-width="2"/>
+  <ellipse cx="390" cy="625" rx="115" ry="14" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="390" y="658" text-anchor="middle" font-weight="bold">PostgreSQL 16</text>
+  <text x="390" y="676" text-anchor="middle" font-size="12">users · providers · services · slots</text>
+  <text x="390" y="692" text-anchor="middle" font-size="12">appointments · notification_outbox</text>
+  <text x="390" y="712" text-anchor="middle" font-size="11" font-style="italic">Docker volume autobook-db · Flyway V1–V3</text>
+
+  <!-- Notification service -->
+  <rect x="850" y="380" width="250" height="220" fill="#fff" stroke="#000" stroke-width="2.5"/>
+  <text x="975" y="408" text-anchor="middle" font-weight="bold" font-size="16">Notification Service (mock)</text>
+  <text x="975" y="428" text-anchor="middle" font-size="12" font-style="italic">"external" email/SMS provider</text>
+  <text x="862" y="456" font-size="13">MockNotificationController</text>
+  <text x="862" y="474" font-size="13">POST /mock-notifications/api/notifications</text>
+  <text x="862" y="498" font-size="13">MockNotificationService</text>
+  <text x="872" y="516" font-size="13">· delivers each idempotency key once</text>
+  <text x="872" y="534" font-size="13">· 202 delivered, 200 duplicate</text>
+  <text x="872" y="552" font-size="13">· fault switches: outage (503),</text>
+  <text x="872" y="570" font-size="13">  fail next N, slow responses</text>
+
+  <!-- DTO box -->
+  <rect x="850" y="140" width="250" height="200" fill="#fff" stroke="#000" stroke-dasharray="4 3"/>
+  <text x="975" y="164" text-anchor="middle" font-weight="bold">NotificationRequest (DTO)</text>
+  <text x="862" y="188" font-size="13">idempotencyKey</text>
+  <text x="872" y="205" font-size="12" font-style="italic">BOOKING_CONFIRMED-appointment-42</text>
+  <text x="862" y="226" font-size="13">type (CONFIRMED / CANCELLED)</text>
+  <text x="862" y="246" font-size="13">recipientEmail, recipientName</text>
+  <text x="862" y="266" font-size="13">subject, message</text>
+  <text x="862" y="286" font-size="13">appointmentId, confirmationNumber</text>
+  <text x="862" y="314" font-size="12" font-style="italic">one request = one complete notification</text>
+
+  <!-- Arrows: client to scheduler -->
+  <line x1="200" y1="110" x2="272" y2="130" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="20" y="60" font-size="12">1. HTTP request (session, CSRF)</text>
+  <line x1="272" y1="160" x2="200" y2="170" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="20" y="212" font-size="12">3. 201 / confirmation page,</text>
+  <text x="20" y="228" font-size="12">   right after the commit</text>
+
+  <!-- transaction to DB -->
+  <path d="M262,240 L240,240 L240,611 L330,611" fill="none" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="140" y="420" font-size="12">2. SQL in one</text>
+  <text x="140" y="436" font-size="12">   transaction</text>
+  <line x1="262" y1="240" x2="275" y2="240" stroke="#000" stroke-width="2"/>
+
+  <!-- internal flow -->
+  <line x1="510" y1="290" x2="510" y2="306" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="520" y="302" font-size="12">4. after commit</text>
+  <line x1="510" y1="370" x2="510" y2="386" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="510" y1="450" x2="510" y2="466" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- dispatcher reads/updates outbox -->
+  <path d="M745,339 L758,339 L758,650 L507,650" fill="none" stroke="#000" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow-open)"/>
+  <text x="520" y="644" font-size="12">7. mark SENT / keep PENDING / FAILED</text>
+
+  <!-- gateway to service -->
+  <line x1="745" y1="490" x2="847" y2="470" stroke="#000" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="776" y="455" font-size="11">5. HTTP</text>
+  <text x="776" y="469" font-size="11">POST</text>
+  <line x1="847" y1="520" x2="745" y2="515" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="776" y="540" font-size="11">6. receipt,</text>
+  <text x="776" y="554" font-size="11">503 or</text>
+  <text x="776" y="568" font-size="11">timeout</text>
+  <line x1="975" y1="342" x2="975" y2="378" stroke="#000" stroke-dasharray="4 3"/>
+</svg>

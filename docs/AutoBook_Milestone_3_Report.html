@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBook Milestone 3 Report</title>
+<style>
+  @page { size: Letter; margin: 1in; }
+  * { color: #000; }
+  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; line-height: 1.4; color: #000; background: #fff; }
+  h1, h2, h3 { font-family: "Times New Roman", Times, serif; color: #000; }
+  h2 { font-size: 14pt; margin: 22px 0 8px; border-bottom: 1px solid #000; padding-bottom: 2px; page-break-after: avoid; }
+  h3 { font-size: 12pt; margin: 14px 0 4px; page-break-after: avoid; }
+  p { margin: 6px 0 8px; text-align: left; }
+  ul, ol { margin: 4px 0 8px; padding-left: 24px; }
+  li { margin: 2px 0; }
+  code { font-family: "Courier New", Courier, monospace; font-size: 10.5pt; }
+  pre { font-family: "Courier New", Courier, monospace; font-size: 9.5pt; line-height: 1.25; border: 1px solid #000;
+        padding: 6px 8px; white-space: pre-wrap; page-break-inside: avoid; margin: 6px 0 10px; }
+  pre code { font-size: 9.5pt; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 12px; font-size: 12pt; }
+  tr { page-break-inside: avoid; }
+  th, td { border: 1px solid #000; padding: 3px 6px; text-align: left; vertical-align: top; }
+  th { font-weight: bold; background: #fff; }
+  td code { font-size: 10pt; overflow-wrap: anywhere; }
+  table.results th:nth-child(1) { width: 47%; } table.results th:nth-child(2) { width: 7%; }
+  table.results th:nth-child(3) { width: 10%; } table.results th:nth-child(4) { width: 36%; }
+  table.map th:nth-child(1) { width: 26%; }
+  table.metrics th:nth-child(1) { width: 44%; }
+  .cover { height: 8.6in; display: block; padding-top: 2.6in; text-align: center; page-break-after: always; }
+  .cover h1 { font-size: 24pt; margin: 0 0 8px; }
+  .cover .sub { font-size: 16pt; margin-bottom: 36px; }
+  .cover .meta { font-size: 12pt; line-height: 1.8; }
+  figure { margin: 8px 0 14px; page-break-inside: avoid; text-align: center; }
+  figure img { width: 100%; border: 1px solid #000; }
+  figcaption { font-size: 12pt; font-style: italic; margin-top: 4px; }
+  .page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>AutoBook</h1>
+  <div class="sub">Milestone 3: Persistence, Distribution, Resilience, and Deployment</div>
+  <div class="meta">
+    CMPE 172 · Enterprise Software Platforms<br>
+    San José State University<br>
+    Author: Jada-Lien Nguyen (GitHub: yadaltmn)<br>
+    Repository: https://github.com/yadaltmn/CMPE172-AutoBook (branch main, tag milestone-3)<br>
+    Stack: Java 21 · Spring Boot 4.1.1 · Spring Security · JDBC (JdbcTemplate) · PostgreSQL 16 · Flyway ·<br>
+    Spring Boot Actuator · Thymeleaf · Docker Compose · GitHub Actions
+  </div>
+</div>
+
+<h2>1. Project Overview</h2>
+<p>AutoBook is an automotive service appointment system. Customers search open appointment slots offered by repair
+shops, book a slot, and manage or cancel their appointments. Providers (repair shops) publish and remove availability
+and see who booked with them. Administrators manage provider records and review all activity.</p>
+<p>Milestone 1 delivered the requirements, the five-table relational schema, and a layered Spring Boot skeleton.
+Milestone 2 added authentication, role-based access control, the booking workflow with transactional double-booking
+protection, cancellation and history, provider availability, a Thymeleaf website, and 85 integration tests.
+Milestone 3 makes AutoBook production-shaped: it runs on Java 21 with a persistent PostgreSQL database, sends booking
+and cancellation confirmations across a distribution boundary to a separate notification service, survives that
+service being slow or down, reports its health and metrics, and is packaged with Docker and tested on every push by
+GitHub Actions. All Milestone 1 and Milestone 2 behavior and tests are preserved: the same 85 tests now run on
+PostgreSQL, alongside 29 new ones.</p>
+
+<h2>2. Milestone 3 Requirements and Status</h2>
+<table>
+  <tr><th>Requirement</th><th>Status</th><th>Where</th></tr>
+  <tr><td>Java 21 (professor correction)</td><td>Done, built in CI</td><td><code>pom.xml</code>, <code>Dockerfile</code>, <code>ci.yml</code></td></tr>
+  <tr><td>Persistent database: PostgreSQL (professor correction)</td><td>Done, tested</td><td>Flyway <code>V1</code>–<code>V3</code>, <code>application.properties</code></td></tr>
+  <tr><td>Existing bookings survive application restart</td><td>Done, tested</td><td><code>ApplicationRestartPersistenceIntegrationTests</code>, CI smoke test</td></tr>
+  <tr><td>Portable setup instructions, no personal paths (professor correction)</td><td>Done</td><td><code>README.md</code>, <code>.env.example</code></td></tr>
+  <tr><td>Mock notification service, coarse-grained DTO and gateway</td><td>Done, tested</td><td><code>mocknotification/</code>, <code>NotificationRequest</code>, <code>NotificationGateway</code></td></tr>
+  <tr><td>Timeout, retries, idempotency, fallback</td><td>Done, tested</td><td><code>HttpNotificationGateway</code>, <code>ResilientNotificationSender</code>, <code>NotificationDispatcher</code></td></tr>
+  <tr><td>Commit-then-notify</td><td>Done, tested</td><td><code>BookingNotifications</code>, <code>notification_outbox</code></td></tr>
+  <tr><td>Logging, health endpoint, booking metrics</td><td>Done, tested</td><td><code>observability/</code>, Actuator <code>/health</code>, <code>/metrics</code></td></tr>
+  <tr><td>Dockerfile, Docker Compose, GitHub Actions, integration tests</td><td>Done, CI green</td><td><code>Dockerfile</code>, <code>docker-compose.yml</code>, <code>.github/workflows/ci.yml</code></td></tr>
+  <tr><td>Annotated milestone Git tags</td><td>Done</td><td><code>milestone-1</code>, <code>milestone-2</code>, <code>milestone-3</code> (Section 12)</td></tr>
+</table>
+
+<h2>3. Architecture and Distribution Boundary</h2>
+<p>AutoBook keeps the layered architecture from earlier milestones (controllers → services with
+<code>@Transactional</code> boundaries → JDBC repositories). Milestone 3 adds a second deployable concern, the
+notification service, and makes the line between the two explicit. The client talks only to the Appointment
+Scheduler; the scheduler talks to the notification service only through <code>NotificationGateway</code>, over HTTP,
+with one coarse-grained message per notification.</p>
+<figure>
+  <img src="diagrams/distribution-diagram.png" alt="Distribution diagram">
+  <figcaption>Figure 1. Client → Appointment Scheduler → Notification Service, with the transaction and the
+  distribution boundary. Source: docs/diagrams/distribution-diagram.svg</figcaption>
+</figure>
+<p>The numbered flow for a booking: (1) the customer submits the booking; (2) one database transaction locks the
+slot, claims it, inserts the appointment, and inserts a notification row into the outbox; (3) the customer gets the
+confirmation as soon as that transaction commits; (4) only after the commit, the dispatcher picks up the outbox row on
+a background thread; (5) the gateway posts the <code>NotificationRequest</code> to the notification service; (6) the
+service answers with a receipt, a 503, or nothing before the timeout; (7) the dispatcher records the result in the
+outbox. Steps 4 to 7 can fail or be repeated without affecting steps 1 to 3.</p>
+<p>The mock notification service runs in the same Spring Boot process for the course demo, in its own package
+(<code>mocknotification</code>) with its own controller. AutoBook never calls it as a Java object: it uses its HTTP
+address, so it can be moved to another host by setting <code>AUTOBOOK_NOTIFICATIONS_URL</code> without code changes.</p>
+
+<h2>4. Persistent PostgreSQL with Flyway</h2>
+<p>Milestone 2 used an in-memory H2 database, and <code>schema.sql</code> started with <code>DROP TABLE</code>, so every
+restart erased all bookings. Milestone 3 moves the same schema into Flyway migrations on PostgreSQL 16. Flyway runs each
+versioned script once and records it in <code>flyway_schema_history</code>, so a restart keeps the data.</p>
+<table>
+  <tr><th>Migration</th><th>Contents</th></tr>
+  <tr><td><code>V1__create_booking_schema.sql</code></td><td>The five Milestone 2 tables with the same columns, keys, and constraints; no <code>DROP</code> statements.</td></tr>
+  <tr><td><code>V2__seed_demo_data.sql</code></td><td>The Milestone 2 demo users, providers, services, slots, and appointments (applied once).</td></tr>
+  <tr><td><code>V3__create_notification_outbox.sql</code></td><td>The new <code>notification_outbox</code> table (Section 6).</td></tr>
+</table>
+<p>Only dialect details changed. The generated column that allows rebooking after a cancellation while keeping history
+needs the <code>STORED</code> keyword in PostgreSQL, and the seed data uses interval arithmetic instead of H2's
+<code>DATEADD</code>:</p>
+<pre><code>-- src/main/resources/db/migration/V1__create_booking_schema.sql
+active_slot_id BIGINT GENERATED ALWAYS AS (
+    CASE WHEN status IN (&#x27;BOOKED&#x27;, &#x27;COMPLETED&#x27;) THEN slot_id END
+) STORED,
+CONSTRAINT fk_appointments_user
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+CONSTRAINT fk_appointments_provider
+    FOREIGN KEY (provider_id) REFERENCES providers(provider_id),
+CONSTRAINT fk_appointments_service
+    FOREIGN KEY (service_id) REFERENCES services(service_id),
+CONSTRAINT fk_appointments_slot
+    FOREIGN KEY (slot_id) REFERENCES availability_slots(slot_id),
+CONSTRAINT chk_appointments_status CHECK (status IN (&#x27;BOOKED&#x27;, &#x27;CANCELLED&#x27;, &#x27;COMPLETED&#x27;)),
+CONSTRAINT uq_appointments_active_slot UNIQUE (active_slot_id)</code></pre>
+<p>The connection comes from environment variables, so no password is stored in the repository. H2's 10-second lock
+wait moves to a PostgreSQL <code>lock_timeout</code> set on every pooled connection, so the Milestone 2 concurrency
+strategy (pessimistic row lock, conditional update, unique constraint) behaves the same:</p>
+<pre><code># src/main/resources/application.properties
+spring.datasource.url=${AUTOBOOK_DB_URL:jdbc:postgresql://localhost:5432/autobook}
+spring.datasource.username=${AUTOBOOK_DB_USER:autobook}
+spring.datasource.password=${AUTOBOOK_DB_PASSWORD:}
+
+# A booking waits at most 10 seconds for another transaction&#x27;s row lock on the same slot,
+# then fails with 409 (same limit as the Milestone 2 H2 LOCK_TIMEOUT).
+spring.datasource.hikari.connection-init-sql=SET lock_timeout = &#x27;10s&#x27;
+
+# Flyway owns the schema: db/migration/V*.sql run once each, in order, and are recorded in
+# flyway_schema_history. Existing tables and bookings are never dropped on restart.
+spring.flyway.enabled=true
+spring.flyway.locations=classpath:db/migration</code></pre>
+<p>Before relying on it, the migrations were run against a real PostgreSQL 16 server: the seed produced the same
+counts as Milestone 2 (2 providers, 4 services, 5 open slots), a second active booking for a slot was rejected by
+<code>uq_appointments_active_slot</code>, a cancelled slot could be rebooked with its history kept, and a second
+<code>SELECT ... FOR UPDATE</code> waited for the first transaction and then saw the slot as taken.</p>
+
+<h2>5. Notification DTO and Gateway</h2>
+<p><code>NotificationRequest</code> is a coarse-grained data transfer object: it carries everything the notification
+service needs (recipient, type, subject, the finished message, the appointment, and the confirmation number) in one
+call, instead of several fine-grained remote calls that would each need their own timeout and retry handling.</p>
+<pre><code>// src/main/java/com/autobook/notification/NotificationRequest.java
+public record NotificationRequest(
+        @NotBlank @Size(max = 100) String idempotencyKey,
+        @NotNull NotificationType type,
+        @NotBlank @Email @Size(max = 255) String recipientEmail,
+        @NotBlank @Size(max = 200) String recipientName,
+        @NotBlank @Size(max = 200) String subject,
+        @NotBlank @Size(max = 2000) String message,
+        @NotNull Long appointmentId,
+        @NotBlank @Size(max = 20) String confirmationNumber
+) { }</code></pre>
+<p><code>NotificationGateway</code> is the only interface the rest of AutoBook uses. It has a single method and hides
+HTTP, URLs, and JSON from the services:</p>
+<pre><code>// src/main/java/com/autobook/notification/NotificationGateway.java
+public interface NotificationGateway {
+
+    /**
+     * Sends one notification. Makes exactly one remote attempt with a bounded timeout; retries and
+     * fallback are the caller&#x27;s job.
+     *
+     * @throws NotificationDeliveryException if the service is unreachable, too slow, or rejects the request
+     */
+    NotificationReceipt send(NotificationRequest request);</code></pre>
+<p><code>HttpNotificationGateway</code> implements it with Spring's <code>RestClient</code>. The connect timeout and
+the read timeout both come from <code>autobook.notifications.timeout</code> (2 seconds by default):</p>
+<pre><code>// src/main/java/com/autobook/notification/HttpNotificationGateway.java
+HttpClient httpClient = HttpClient.newBuilder()
+        .connectTimeout(properties.timeout())
+        .build();
+JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+requestFactory.setReadTimeout(properties.timeout());
+this.restClient = RestClient.builder().requestFactory(requestFactory).build();</code></pre>
+<p>Failures are translated by kind. Server errors, timeouts, and connection errors are retryable; a 4xx response means
+the request itself is invalid, so repeating it cannot help:</p>
+<pre><code>// src/main/java/com/autobook/notification/HttpNotificationGateway.java
+} catch (HttpServerErrorException ex) {
+    throw new NotificationDeliveryException(
+            &quot;Notification service returned &quot; + ex.getStatusCode().value() + &quot;.&quot;, true, ex);
+} catch (HttpClientErrorException ex) {
+    throw new NotificationDeliveryException(
+            &quot;Notification service rejected the request with &quot; + ex.getStatusCode().value() + &quot;.&quot;, false, ex);
+} catch (ResourceAccessException ex) {
+    String reason = hasCause(ex, HttpTimeoutException.class)
+            ? &quot;Notification service did not answer within &quot; + properties.timeout().toMillis() + &quot; ms.&quot;
+            : &quot;Notification service could not be reached.&quot;;
+    throw new NotificationDeliveryException(reason, true, ex);</code></pre>
+<p>The mock service is idempotent. It keeps one entry per idempotency key, so a repeated key is acknowledged as a
+duplicate (HTTP 200) and nothing is delivered twice. Fault switches (admin only) simulate an outage, a number of
+failed requests, or slow responses for demos and tests.</p>
+<pre><code>// src/main/java/com/autobook/mocknotification/MockNotificationService.java
+DeliveredNotification delivered = deliveredByKey.computeIfAbsent(request.idempotencyKey(), key -&gt; {
+    duplicate[0] = false;
+    return new DeliveredNotification(UUID.randomUUID().toString(), request, LocalDateTime.now(clock));
+});</code></pre>
+
+<h2>6. Commit-Then-Notify with a Transactional Outbox</h2>
+<p>Calling the notification service inside the booking transaction would be wrong in both directions: a slow service
+would hold the slot's row lock and block other customers, and a booking that rolls back afterwards would already have
+sent a confirmation. AutoBook therefore writes the notification to a table in the same transaction and sends it only
+after the commit (the transactional outbox pattern).</p>
+<p>Inside <code>BookingService</code>, the outbox row is written after the appointment is inserted, still inside the
+transaction that holds the slot lock:</p>
+<pre><code>// src/main/java/com/autobook/service/BookingService.java
+if (slotRepository.claimIfAvailable(slotId, now) != 1) {
+    throw new BookingConflictException(&quot;Sorry, this appointment slot has already been booked.&quot;);
+}
+
+long appointmentId = appointmentRepository.insert(
+        customer.userId(), slot.providerId(), slot.serviceId(), slotId, AppointmentStatus.BOOKED, now);
+
+AppointmentDto appointment = appointmentRepository.findById(appointmentId).orElseThrow();
+// Queued in this transaction; sent only after commit (see NotificationDispatcher).
+bookingNotifications.bookingConfirmed(appointment);
+
+log.info(&quot;Customer {} booked slot {} as appointment {}&quot;, customer.userId(), slotId, appointmentId);
+return appointment;</code></pre>
+<p><code>BookingNotifications</code> uses <code>Propagation.MANDATORY</code>, so it fails fast if anyone calls it
+without an active transaction (a test checks this). The insert is idempotent: the idempotency key is unique, and a
+second insert for the same event does nothing.</p>
+<pre><code>// src/main/java/com/autobook/notification/BookingNotifications.java
+@Transactional(propagation = Propagation.MANDATORY)
+public void bookingConfirmed(AppointmentDto appointment) {
+    ...
+    private void enqueue(AppointmentDto appointment, NotificationType type, String subject, String message) {
+        NotificationRequest request = new NotificationRequest(
+                idempotencyKey(type, appointment.appointmentId()), type,
+                appointment.customerEmail(), appointment.customerName(), subject, message,
+                appointment.appointmentId(), confirmationNumber(appointment));
+        outboxRepository.insertIfAbsent(request, LocalDateTime.now(clock))
+                .ifPresent(outboxId -&gt; events.publishEvent(new NotificationEnqueuedEvent(outboxId)));</code></pre>
+<pre><code>// src/main/java/com/autobook/notification/NotificationOutboxRepository.java
+INSERT INTO notification_outbox (idempotency_key, appointment_id, notification_type,
+    recipient_email, recipient_name, subject, message, confirmation_number,
+    status, created_at, next_attempt_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, &#x27;PENDING&#x27;, ?, ?)
+ON CONFLICT (idempotency_key) DO NOTHING
+RETURNING outbox_id</code></pre>
+<pre><code>-- src/main/resources/db/migration/V3__create_notification_outbox.sql
+CREATE TABLE notification_outbox (
+    outbox_id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    -- One row per business event, e.g. BOOKING_CONFIRMED-appointment-42. Also sent to the
+    -- notification service, which delivers each key at most once.
+    idempotency_key VARCHAR(100) NOT NULL,
+    appointment_id BIGINT NOT NULL,
+    notification_type VARCHAR(30) NOT NULL,
+    recipient_email VARCHAR(255) NOT NULL,
+    recipient_name VARCHAR(200) NOT NULL,
+    subject VARCHAR(200) NOT NULL,
+    message VARCHAR(2000) NOT NULL,
+    confirmation_number VARCHAR(20) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT &#x27;PENDING&#x27;,
+    attempts INT NOT NULL DEFAULT 0,
+    delivery_rounds INT NOT NULL DEFAULT 0,
+    last_error VARCHAR(500),
+    external_notification_id VARCHAR(100),
+    created_at TIMESTAMP NOT NULL,
+    next_attempt_at TIMESTAMP NOT NULL,
+    sent_at TIMESTAMP,
+    CONSTRAINT uq_notification_outbox_key UNIQUE (idempotency_key),</code></pre>
+<p>The event published by <code>enqueue</code> is only delivered to the dispatcher in the <code>AFTER_COMMIT</code>
+phase. If the transaction rolls back, Spring discards the event and the outbox row disappears with the appointment, so
+nothing is sent. The work is handed to a background thread, so the customer's request returns immediately:</p>
+<pre><code>// src/main/java/com/autobook/notification/NotificationDispatcher.java
+@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+public void onNotificationEnqueued(NotificationEnqueuedEvent event) {
+    if (!properties.dispatchOnCommit()) {
+        return;
+    }</code></pre>
+<p>The customer-facing guarantee is the one required by the milestone: <b>a failed notification never causes a
+committed appointment to disappear</b>. The appointment and the outbox row commit together; everything after the
+commit only updates the outbox row.</p>
+
+<h2>7. Timeout, Retry, Idempotency, and Fallback</h2>
+<h3>Timeout</h3>
+<p>Every HTTP call is bounded by the gateway's connect and read timeout (2 s). A slow service cannot hold a dispatcher
+thread indefinitely, and it never holds a database lock, because the call happens after the commit.</p>
+<h3>Bounded retries with backoff</h3>
+<p>One delivery round makes at most three attempts. The wait between attempts grows from 200 ms by a factor of 2,
+capped at 2 s. Non-retryable failures stop immediately.</p>
+<pre><code>// src/main/java/com/autobook/notification/ResilientNotificationSender.java
+for (int attempt = 1; ; attempt++) {
+    try {
+        NotificationReceipt receipt = gateway.send(request);
+        if (attempt &gt; 1) {
+            log.info(&quot;Notification {} delivered on attempt {}/{}&quot;, request.idempotencyKey(), attempt, maxAttempts);
+        }
+        return new DeliveryResult(receipt, attempt);
+    } catch (NotificationDeliveryException ex) {
+        if (!ex.isRetryable() || attempt &gt;= maxAttempts) {
+            throw new DeliveryFailedException(ex.getMessage(), ex.isRetryable(), attempt, ex);
+        }
+        log.warn(&quot;Notification {} attempt {}/{} failed: {} Retrying in {} ms&quot;,
+                request.idempotencyKey(), attempt, maxAttempts, ex.getMessage(), backoff.toMillis());
+        metrics.retried();
+        sleep(backoff);
+        backoff = nextBackoff(backoff);</code></pre>
+<h3>Idempotency</h3>
+<p>Each business event has one key, for example <code>BOOKING_CONFIRMED-appointment-42</code>. The key is unique in the
+outbox (one row per event) and is sent with every attempt. The important case is a timeout where the service did
+receive the request but its answer was lost: the retry is answered as a duplicate, and the customer is notified once.
+The test <code>timedOutAttemptsAreRetriedAndIdempotencyPreventsADuplicateNotification</code> reproduces exactly this.
+In addition, a row is claimed with a conditional update before each round, so the on-commit dispatch and the retry job
+never send the same row at the same time; if the process dies mid-round, the claim expires and the row is retried.</p>
+<pre><code>// src/main/java/com/autobook/notification/NotificationOutboxRepository.java
+public boolean claim(long outboxId, LocalDateTime now, LocalDateTime leaseUntil) {
+    return jdbcTemplate.update(&quot;&quot;&quot;
+            UPDATE notification_outbox SET next_attempt_at = ?
+            WHERE outbox_id = ? AND status = &#x27;PENDING&#x27; AND next_attempt_at &lt;= ?
+            &quot;&quot;&quot;, Timestamp.valueOf(leaseUntil), outboxId, Timestamp.valueOf(now)) == 1;</code></pre>
+<h3>Fallback</h3>
+<p>If all attempts of a round fail, the booking stays as it is. The outbox row stays <code>PENDING</code> with a later
+<code>next_attempt_at</code> (30 s times the round number), and a scheduled job retries due rows every 15 s. Because
+the outbox is in PostgreSQL, pending notifications also survive a restart of AutoBook. After five rounds the row is
+marked <code>FAILED</code> and an ERROR is logged so an administrator can follow up (<code>GET
+/api/admin/notifications</code>); the customer still has the confirmation page and the booking under My appointments.</p>
+<pre><code>// src/main/java/com/autobook/notification/NotificationDispatcher.java
+private DeliveryOutcome fallback(OutboxEntry entry, ResilientNotificationSender.DeliveryFailedException ex) {
+    int round = entry.deliveryRounds() + 1;
+    if (!ex.isRetryable() || round &gt;= properties.maxDeliveryRounds()) {
+        outboxRepository.markFailed(entry.outboxId(), ex.attempts(), ex.getMessage());
+        log.error(&quot;Notification {} for appointment {} FAILED after {} round(s): {} The appointment is kept;&quot;
+                        + &quot; follow up manually (outbox {}).&quot;,
+                entry.type(), entry.appointmentId(), round, ex.getMessage(), entry.outboxId());
+        metrics.roundFinished(&quot;failed&quot;);
+        return DeliveryOutcome.FAILED;
+    }
+    Duration wait = properties.redeliveryDelay().multipliedBy(round);
+    outboxRepository.scheduleRetry(entry.outboxId(), ex.attempts(), ex.getMessage(),
+            LocalDateTime.now(clock).plus(wait));
+    log.warn(&quot;Notification {} for appointment {} not delivered (round {}/{}): {} Kept in outbox {}, next try in {} s&quot;,
+            entry.type(), entry.appointmentId(), round, properties.maxDeliveryRounds(), ex.getMessage(),
+            entry.outboxId(), wait.toSeconds());
+    metrics.roundFinished(&quot;retry_scheduled&quot;);
+    return DeliveryOutcome.RETRY_SCHEDULED;</code></pre>
+<p>All values are configuration, not code:</p>
+<pre><code># src/main/resources/application.properties
+autobook.notifications.timeout=2s
+autobook.notifications.max-attempts=3
+autobook.notifications.initial-backoff=200ms
+autobook.notifications.backoff-multiplier=2.0
+autobook.notifications.max-backoff=2s
+autobook.notifications.redelivery-delay=30s
+autobook.notifications.max-delivery-rounds=5
+autobook.notifications.retry-interval-ms=15000</code></pre>
+
+<h2>8. Logging, Health Endpoint, and Metrics</h2>
+<h3>Logging</h3>
+<p>Log levels have a fixed meaning. INFO: bookings, cancellations, delivered notifications. WARN: booking conflicts
+detected by the database, retried notification attempts, notifications kept for a later round. ERROR: notifications
+that failed for good, or an outbox that cannot be read. Log lines identify appointments and outbox rows by id; they
+never contain passwords, session ids, email addresses, or message bodies. These lines are from the CI run of the
+notification tests, which use shorter test timings (timestamps and thread names removed):</p>
+<pre><code>WARN  ResilientNotificationSender: Notification BOOKING_CONFIRMED-appointment-5 attempt 1/3 failed: Notification service returned 503. Retrying in 20 ms
+WARN  NotificationDispatcher: Notification BOOKING_CONFIRMED for appointment 5 not delivered (round 1/3): Notification service returned 503. Kept in outbox 1, next try in 30 s
+ERROR NotificationDispatcher: Notification BOOKING_CONFIRMED for appointment 5 FAILED after 3 round(s): Notification service returned 503. The appointment is kept; follow up manually (outbox 1).
+INFO  NotificationDispatcher: Notification BOOKING_CONFIRMED for appointment 7 sent (outbox 3, attempts 1, duplicate=true)</code></pre>
+<h3>Health endpoint</h3>
+<p>Spring Boot Actuator serves <code>GET /health</code> at the root path. It is public, so Docker, a load balancer, or
+an instructor can check it without signing in. It returns <code>UP</code> or <code>DOWN</code> with the status of each
+component: <code>db</code> (a live PostgreSQL connectivity check), <code>diskSpace</code>, and
+<code>notificationOutbox</code> (a custom indicator). Administrators also see details such as the database product and
+the number of pending and failed notifications. <code>/health/liveness</code> and <code>/health/readiness</code> are
+available for container orchestration, and the Docker image's <code>HEALTHCHECK</code> calls <code>/health</code>.
+The outbox indicator stays <code>UP</code> while notifications wait, because bookings keep working without the
+notification service; it reports <code>DOWN</code> only if the outbox table cannot be read.</p>
+<h3>Metrics</h3>
+<p>Micrometer metrics are available to administrators at <code>GET /metrics/{name}</code>:</p>
+<table class="metrics">
+  <tr><th>Metric</th><th>Meaning</th></tr>
+  <tr><td><code>autobook.bookings.created</code></td><td>Successful bookings</td></tr>
+  <tr><td><code>autobook.bookings.conflicts</code></td><td>Booking attempts rejected because the slot was taken (409)</td></tr>
+  <tr><td><code>autobook.bookings.cancelled</code></td><td>Cancellations</td></tr>
+  <tr><td><code>autobook.booking.duration</code></td><td>Time in the booking transaction, tagged <code>outcome</code> (success, conflict, rejected)</td></tr>
+  <tr><td><code>autobook.notifications.rounds</code></td><td>Delivery rounds, tagged <code>outcome</code> (sent, retry_scheduled, failed)</td></tr>
+  <tr><td><code>autobook.notifications.retries</code></td><td>Attempts retried after a timeout or error</td></tr>
+  <tr><td><code>autobook.notifications.outbox</code></td><td>Current outbox rows, tagged <code>status</code> (pending, failed)</td></tr>
+</table>
+<pre><code>// src/main/java/com/autobook/observability/BookingMetrics.java
+this.created = Counter.builder(&quot;autobook.bookings.created&quot;)
+        .description(&quot;Appointments booked successfully&quot;).register(registry);</code></pre>
+
+<h2>9. Docker, Docker Compose, and Continuous Integration</h2>
+<ul>
+  <li><b>Dockerfile:</b> a multi-stage build. The first stage compiles and packages AutoBook with the Maven Wrapper on
+  the Java 21 JDK; the runtime stage contains only the Java 21 JRE and the application JAR, runs as a non-root user,
+  and declares a <code>HEALTHCHECK</code> on <code>/health</code>.</li>
+  <li><b>docker-compose.yml:</b> PostgreSQL 16 with a named volume (<code>autobook-db</code>) and a
+  <code>pg_isready</code> health check, and the AutoBook service, which starts only after the database is healthy.
+  Settings come from a git-ignored <code>.env</code> file created from <code>.env.example</code>; Compose refuses to
+  start if no database password is set.</li>
+  <li><b>Portable instructions:</b> the README now starts from <code>git clone</code> and uses only relative paths;
+  the personal <code>/Users/...</code> path from Milestone 2 is gone.</li>
+  <li><b>GitHub Actions</b> (<code>.github/workflows/ci.yml</code>) runs on every push and pull request with two jobs.
+  <i>Build and test (Java 21)</i> runs <code>./mvnw -B verify</code>, which starts PostgreSQL 16 containers with
+  Testcontainers and runs the full test suite. <i>Docker image and Compose smoke test</i> builds the image, starts the
+  Compose stack, books an appointment through the REST API as a customer, checks as admin that its confirmation was
+  sent, restarts the application container, and verifies the booking is still <code>BOOKED</code>
+  (<code>scripts/compose-smoke-test.sh</code>).</li>
+</ul>
+
+<h2>10. Testing Results</h2>
+<p>All tests run against real PostgreSQL 16 databases started by Testcontainers. Test classes that commit data
+(concurrency, notifications, restart) use their own database so the seed data other classes rely on stays unchanged.
+The results below are from GitHub Actions run 40641522203 on commit <code>c8704a0</code> (Java 21, PostgreSQL 16.15):
+<b>114 tests, 0 failures, 0 errors, 0 skipped</b>, and the Docker Compose smoke test passed. The commits after
+<code>c8704a0</code> change only documentation and the versions of the GitHub Actions used by the workflow, and CI
+passed on the final commit before it was merged and tagged.</p>
+<table class="results">
+  <tr><th>Test class</th><th>Tests</th><th>Result</th><th>Covers</th></tr>
+  <tr><td><code>AdminIntegrationTests</code></td><td>5</td><td>Passed</td><td>Admin pages and API, provider editing, access control (M2)</td></tr>
+<tr><td><code>ApplicationRestartPersistenceIntegrationTests</code></td><td>1</td><td>Passed</td><td>Bookings, history, and outbox survive an application restart (M3)</td></tr>
+<tr><td><code>AutobookApplicationTests</code></td><td>5</td><td>Passed</td><td>M1 context, seed data, endpoints, database duplicate rejection</td></tr>
+<tr><td><code>BookingIntegrationTests</code></td><td>11</td><td>Passed</td><td>Booking success and 400/404/409 cases, impersonation, CSRF (M2)</td></tr>
+<tr><td><code>CancellationIntegrationTests</code></td><td>9</td><td>Passed</td><td>Cancellation, ownership, history, rebooking (M2)</td></tr>
+<tr><td><code>ConcurrentBookingIntegrationTests</code></td><td>3</td><td>Passed</td><td>Two-customer HTTP race, 12-thread race, cancel vs. rebook (M2)</td></tr>
+<tr><td><code>CustomerWebPageIntegrationTests</code></td><td>10</td><td>Passed</td><td>Website booking and cancellation flow (M2)</td></tr>
+<tr><td><code>HealthAndMetricsIntegrationTests</code></td><td>6</td><td>Passed</td><td>GET /health with database check, probes, metrics security and counters (M3)</td></tr>
+<tr><td><code>MockNotificationServiceIntegrationTests</code></td><td>8</td><td>Passed</td><td>Mock service delivery, idempotency, outage, validation, admin-only views (M3)</td></tr>
+<tr><td><code>NotificationGatewayIntegrationTests</code></td><td>4</td><td>Passed</td><td>Gateway over real HTTP: success, duplicate, outage, timeout (M3)</td></tr>
+<tr><td><code>NotificationOutboxIntegrationTests</code></td><td>10</td><td>Passed</td><td>Commit-then-notify, outage fallback and recovery, retries, timeout and idempotency, FAILED, rollback (M3)</td></tr>
+<tr><td><code>ProviderAvailabilityIntegrationTests</code></td><td>12</td><td>Passed</td><td>Provider slot management and validation (M2)</td></tr>
+<tr><td><code>ProviderWebPageIntegrationTests</code></td><td>6</td><td>Passed</td><td>Provider pages and form validation (M2)</td></tr>
+<tr><td><code>SecurityIntegrationTests</code></td><td>17</td><td>Passed</td><td>Login per role, 401/403, role isolation, CSRF, logout (M2)</td></tr>
+<tr><td><code>SlotSearchIntegrationTests</code></td><td>7</td><td>Passed</td><td>Slot filters and pagination (M2)</td></tr>
+</table>
+<p>The eight required Milestone 3 scenarios map to these tests:</p>
+<table class="map">
+  <tr><th>Scenario</th><th>Test</th></tr>
+  <tr><td>1. Successful booking</td><td><code>BookingIntegrationTests</code>, <code>bookingIsSavedFirstAndConfirmationIsDeliveredAfterCommit</code></td></tr>
+  <tr><td>2. Successful cancellation</td><td><code>CancellationIntegrationTests</code>, <code>cancellationSendsItsOwnNotificationAndKeepsHistory</code></td></tr>
+  <tr><td>3. Concurrent booking protection</td><td><code>ConcurrentBookingIntegrationTests</code> (2 HTTP clients; 12 threads), <code>rejectedDoubleBookingSendsNoNotification</code></td></tr>
+  <tr><td>4. Booking while the notification service is unavailable</td><td><code>notificationServiceOutageDoesNotUndoTheBookingAndRecoversLater</code>, <code>notificationIsMarkedFailedAfterTheLastRoundButTheBookingStays</code></td></tr>
+  <tr><td>5. Notification timeout and retry handling</td><td><code>slowServiceTimesOutWithinTheConfiguredLimit</code>, <code>transientFailuresAreRetriedWithinOneRound</code></td></tr>
+  <tr><td>6. Idempotent notification delivery</td><td><code>timedOutAttemptsAreRetriedAndIdempotencyPreventsADuplicateNotification</code>, <code>repeatedIdempotencyKeyIsAcknowledgedButNotDeliveredTwice</code>, <code>queueingTheSameEventTwiceKeepsOneOutboxRow</code></td></tr>
+  <tr><td>7. Database persistence after restart</td><td><code>bookingsAndCancellationHistorySurviveAnApplicationRestart</code>; CI Compose smoke test (container restart)</td></tr>
+  <tr><td>8. Health endpoint and database connectivity</td><td><code>healthIsPublicAndReportsDatabaseConnectivity</code>, <code>adminSeesDatabaseDetails</code>, <code>livenessAndReadinessProbesArePublic</code></td></tr>
+</table>
+<p>Commit-then-notify itself is covered by <code>rolledBackBookingQueuesAndSendsNothing</code> (a booking whose
+transaction rolls back leaves no outbox row and sends no request) and
+<code>queueingOutsideATransactionIsRejected</code>.</p>
+
+<h2>11. Failure and Recovery Scenario</h2>
+<p><b>Scenario: the notification service is down while customers are booking.</b></p>
+<ol>
+  <li>A customer books a slot. The transaction commits the appointment (<code>BOOKED</code>), the taken slot, and a
+  <code>PENDING</code> outbox row; the customer immediately sees the confirmation page.</li>
+  <li>After the commit, the dispatcher sends the notification. All three attempts fail with 503 or time out; each
+  retry is logged as WARN, and the row is kept for a later round (WARN, with the next retry time).</li>
+  <li><code>/health</code> stays <code>UP</code>, because booking still works. Administrators see the pending count rise
+  in the <code>notificationOutbox</code> health details and in <code>autobook.notifications.outbox</code>, and
+  <code>autobook.notifications.rounds{outcome=retry_scheduled}</code> increases.</li>
+  <li><b>Recovery:</b> when the service is available again, the retry job delivers every due notification. If
+  AutoBook restarts during the outage, nothing is lost, because the outbox is in PostgreSQL. Retries reuse the same
+  idempotency key, so no customer receives a duplicate.</li>
+  <li>If the outage outlasts five rounds, the row becomes <code>FAILED</code> with an ERROR log. An administrator finds
+  it at <code>/api/admin/notifications</code> and contacts the customer. The appointment is never changed.</li>
+</ol>
+<p>The README shows how to reproduce this with the mock service's fault switch
+(<code>PUT /mock-notifications/api/faults</code>). The same sequence is automated in
+<code>NotificationOutboxIntegrationTests</code>, and the real log lines in Section 8 come from it.</p>
+<p><b>Related failure: the database is unavailable.</b> <code>/health</code> reports <code>db</code> as
+<code>DOWN</code> and the overall status as <code>DOWN</code>, so Docker marks the container unhealthy. Bookings fail
+with an error instead of being half-saved, because each booking is a single transaction. Docker Compose restarts
+PostgreSQL (<code>restart: unless-stopped</code>) and the data is intact on the named volume.</p>
+
+<h2>12. Git History and Milestone Tags</h2>
+<p>Milestone 3 was developed on a separate <code>milestone-3</code> branch in small commits, each describing one
+feature, and merged into <code>main</code> only after GitHub Actions passed. No history was rewritten and nothing was
+force-pushed. All commits use the school identity <code>yadaltmn &lt;jada-lien.nguyen@sjsu.edu&gt;</code>.</p>
+<table>
+  <tr><th>Commit</th><th>Message</th></tr>
+  <tr><td><code>0e335c1</code></td><td>ci: add GitHub Actions build and test workflow</td></tr>
+  <tr><td><code>6bee132</code></td><td>build: upgrade AutoBook to Java 21</td></tr>
+  <tr><td><code>5f6ccba</code></td><td>feat: migrate booking storage to persistent PostgreSQL with Flyway</td></tr>
+  <tr><td><code>bb597f1</code></td><td>feat: add mock external notification service and request DTO</td></tr>
+  <tr><td><code>71e6138</code></td><td>feat: add NotificationGateway with HTTP timeout</td></tr>
+  <tr><td><code>9bc6f66</code></td><td>feat: add commit-then-notify outbox with retries and fallback</td></tr>
+  <tr><td><code>665fcb3</code></td><td>feat: add health endpoint, booking metrics and logging</td></tr>
+  <tr><td><code>fa4e4e5</code></td><td>build: add Docker image, Compose setup and CI smoke test</td></tr>
+  <tr><td><code>b658232</code></td><td>test: verify bookings persist across an application restart</td></tr>
+  <tr><td><code>c8704a0</code></td><td>docs: document Milestone 3 setup and design in the README</td></tr>
+  <tr><td><code>ccefd10</code></td><td>ci: move workflow actions to their Node 24 releases</td></tr>
+  <tr><td>(final)</td><td>docs: add Milestone 3 report, distribution diagram, and walkthrough script</td></tr>
+</table>
+<p>Annotated tags mark each milestone:</p>
+<table>
+  <tr><th>Tag</th><th>Commit</th><th>Why this commit</th></tr>
+  <tr><td><code>milestone-1</code></td><td><code>e3b01f1</code></td><td>Last commit on the Milestone 1 submission day (Sept 24, 2026). The <code>milestone1-backup</code> branch points one commit later (<code>17d53db</code>, Oct 8), which only adds two <code>.gitignore</code> lines; the source code is identical.</td></tr>
+  <tr><td><code>milestone-2</code></td><td><code>edfa389</code></td><td>Final Milestone 2 commit on <code>main</code> (Oct 8, 2026), after the Milestone 2 report.</td></tr>
+  <tr><td><code>milestone-3</code></td><td>final <code>main</code> commit</td><td>The verified, merged Milestone 3 code and documentation.</td></tr>
+</table>
+
+<h2>13. Known Limitations</h2>
+<ul>
+  <li>The notification service is a mock in the same process. It records messages in memory (cleared on restart)
+  and sends no real email or SMS. Its fault switches are for demos and tests and are restricted to administrators.</li>
+  <li>The Milestone 3 code was not run on the author's own computer during development; it was verified by the
+  automated test suite and the Docker Compose smoke test in GitHub Actions.</li>
+  <li>Demo slot times are relative to the day the database is first created, so they become past slots over time;
+  <code>docker compose down -v</code> recreates the demo data.</li>
+  <li>A customer who loses a booking race gets a clear 409 and picks another slot; bookings themselves are not retried
+  automatically.</li>
+  <li>Times are local times in one configured time zone (<code>AUTOBOOK_TIMEZONE</code>).</li>
+</ul>
+
+<h2>14. Conclusion</h2>
+<p>Milestone 3 turns AutoBook from a single-process demo with an in-memory database into a small distributed system
+that keeps its data, tolerates a failing dependency, and can be deployed and verified automatically. Bookings are
+stored in PostgreSQL through Flyway migrations and survive restarts. Confirmations cross a clear distribution boundary
+through one coarse-grained gateway call, and the commit-then-notify outbox, with timeouts, bounded retries,
+idempotency keys, and a durable fallback, guarantees that a slow or unavailable notification service never blocks a
+customer or undoes a committed booking. Health checks, metrics, and leveled logs make these failures visible, and
+Docker Compose with GitHub Actions lets anyone build, run, and verify the system from a fresh clone. All Milestone 1
+and Milestone 2 functionality, including JDBC-only data access, the three-layer double-booking protection,
+authentication, authorization, provider availability, and cancellation history, is preserved and covered by the same
+tests, now running on PostgreSQL.</p>
+
+</body>
+</html>
