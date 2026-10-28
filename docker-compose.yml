@@ -1,0 +1,43 @@
+# AutoBook with a persistent PostgreSQL database.
+#   cp .env.example .env      # then set AUTOBOOK_DB_PASSWORD
+#   docker compose up --build
+# Bookings are stored in the named volume "autobook-db", so they survive
+# `docker compose restart`, `docker compose down` and `up` again. Only
+# `docker compose down -v` deletes the data.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${AUTOBOOK_DB_NAME:-autobook}
+      POSTGRES_USER: ${AUTOBOOK_DB_USER:-autobook}
+      POSTGRES_PASSWORD: ${AUTOBOOK_DB_PASSWORD:?Set AUTOBOOK_DB_PASSWORD in .env (copy .env.example to .env)}
+      TZ: ${AUTOBOOK_TIMEZONE:-America/Los_Angeles}
+      PGTZ: ${AUTOBOOK_TIMEZONE:-America/Los_Angeles}
+    volumes:
+      - autobook-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  app:
+    build: .
+    image: autobook:local
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      AUTOBOOK_DB_URL: jdbc:postgresql://db:5432/${AUTOBOOK_DB_NAME:-autobook}
+      AUTOBOOK_DB_USER: ${AUTOBOOK_DB_USER:-autobook}
+      AUTOBOOK_DB_PASSWORD: ${AUTOBOOK_DB_PASSWORD:?Set AUTOBOOK_DB_PASSWORD in .env (copy .env.example to .env)}
+      AUTOBOOK_NOTIFICATIONS_URL: ${AUTOBOOK_NOTIFICATIONS_URL:-}
+      TZ: ${AUTOBOOK_TIMEZONE:-America/Los_Angeles}
+    ports:
+      - "${AUTOBOOK_PORT:-8080}:8080"
+    restart: unless-stopped
+
+volumes:
+  autobook-db:
