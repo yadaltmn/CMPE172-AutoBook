@@ -7,8 +7,12 @@ import com.autobook.dto.AppointmentHistoryDto;
 import com.autobook.dto.AvailabilitySlotDto;
 import com.autobook.dto.ProviderDto;
 import com.autobook.dto.ServiceDto;
+import com.autobook.dto.SlotDetailsDto;
 import com.autobook.dto.SlotSearchCriteria;
+import com.autobook.exception.ForbiddenOperationException;
+import com.autobook.exception.ResourceNotFoundException;
 import com.autobook.model.AppUser;
+import com.autobook.model.AppointmentStatus;
 import com.autobook.notification.BookingNotifications;
 import com.autobook.service.AppointmentService;
 import com.autobook.service.SlotService;
@@ -61,6 +65,7 @@ public class BookingAgentTools {
     protected final AppointmentService appointmentService;
     protected final KnowledgeBaseService knowledgeBase;
     protected final boolean knowledgeBaseAvailable;
+    protected final PendingActionStore pendingActions;
     protected final Clock clock;
     private final int maxToolCalls;
     private final List<String> toolsUsed = new CopyOnWriteArrayList<>();
@@ -68,13 +73,15 @@ public class BookingAgentTools {
 
     public BookingAgentTools(AppUser customer, Conversation conversation, SlotService slotService,
                              AppointmentService appointmentService, KnowledgeBaseService knowledgeBase,
-                             boolean knowledgeBaseAvailable, Clock clock, int maxToolCalls) {
+                             boolean knowledgeBaseAvailable, PendingActionStore pendingActions, Clock clock,
+                             int maxToolCalls) {
         this.customer = customer;
         this.conversation = conversation;
         this.slotService = slotService;
         this.appointmentService = appointmentService;
         this.knowledgeBase = knowledgeBase;
         this.knowledgeBaseAvailable = knowledgeBaseAvailable;
+        this.pendingActions = pendingActions;
         this.clock = clock;
         this.maxToolCalls = maxToolCalls;
     }
@@ -185,6 +192,90 @@ public class BookingAgentTools {
             return List.of(new PolicyPassage("none", "The AutoBook knowledge base does not cover this question."));
         }
         return passages.stream().map(passage -> new PolicyPassage(passage.section(), passage.text())).toList();
+    }
+
+    @Tool(description = "Prepare a booking of one open slot for the signed-in customer. This does NOT book: it "
+            + "creates a confirmation request that the customer must confirm. Call it only when the customer asked "
+            + "to book that specific slot. Afterwards, tell the customer what will be booked and ask them to confirm.")
+    public String requestBooking(@ToolParam(description = "slotId from searchAvailableSlots") Long slotId) {
+        if (!allowCall("requestBooking")) {
+            return limitMessage();
+        }
+        if (slotId == null || slotId < 1) {
+            return "A valid slotId from searchAvailableSlots is required.";
+        }
+        SlotDetailsDto slot;
+        try {
+            slot = slotService.getSlotDetails(slotId);
+        } catch (ResourceNotFoundException ex) {
+            return "Slot #" + slotId + " does not exist. Search again and use a slotId from the results.";
+        }
+        if (!slot.available() || !slot.startTime().isAfter(LocalDateTime.now(clock))) {
+            List<SlotOption> alternatives = alternativesFor(slot.serviceId(), slot.slotId());
+            return "Slot #" + slotId + " is no longer available, so nothing was prepared. Nearest open "
+                    + slot.serviceName() + " slots: " + describe(alternatives) + " Offer these to the customer.";
+        }
+        String summary = "Book " + slot.serviceName() + " at " + slot.providerName() + " on "
+                + DISPLAY.format(slot.startTime()) + " (slot #" + slot.slotId() + ")";
+        PendingActionStore.PendingAction action = pendingActions.create(customer.userId(), conversation.conversationId(),
+                PendingActionStore.Type.BOOK, slot.slotId(), summary);
+        return "CONFIRMATION REQUIRED, NOT BOOKED YET: " + action.summary() + ". Ask the customer to confirm "
+                + "(Confirm button or reply yes). The request expires in "
+                + java.time.Duration.between(clock.instant(), action.expiresAt()).toMinutes() + " minutes.";
+    }
+
+    @Tool(description = "Prepare the cancellation of one of the signed-in customer's own upcoming appointments. This "
+            + "does NOT cancel: the customer must confirm. Use appointmentId from listMyAppointments.")
+    public String requestCancellation(@ToolParam(description = "appointmentId from listMyAppointments") Long appointmentId) {
+        if (!allowCall("requestCancellation")) {
+            return limitMessage();
+        }
+        if (appointmentId == null || appointmentId < 1) {
+            return "A valid appointmentId from listMyAppointments is required.";
+        }
+        AppointmentDto appointment;
+        try {
+            // Ownership is enforced by the existing service: another customer's appointment is refused.
+            appointment = appointmentService.getAppointment(customer, appointmentId);
+        } catch (ForbiddenOperationException | ResourceNotFoundException ex) {
+            return "Appointment #" + appointmentId + " is not one of your appointments, so it cannot be cancelled.";
+        }
+        if (appointment.status() != AppointmentStatus.BOOKED || !appointmentService.isCancellable(appointment)) {
+            return "Appointment #" + appointmentId + " cannot be cancelled: it is "
+                    + appointment.status().name().toLowerCase(Locale.ROOT) + " or has already started.";
+        }
+        String summary = "Cancel your " + appointment.serviceName() + " at " + appointment.providerName() + " on "
+                + DISPLAY.format(appointment.startTime()) + " (confirmation "
+                + BookingNotifications.confirmationNumber(appointment) + ")";
+        PendingActionStore.PendingAction action = pendingActions.create(customer.userId(), conversation.conversationId(),
+                PendingActionStore.Type.CANCEL, appointmentId, summary);
+        return "CONFIRMATION REQUIRED, NOT CANCELLED YET: " + action.summary() + ". Ask the customer to confirm.";
+    }
+
+    /** Open slots for the same service, excluding one slot, for "that slot is gone" answers. */
+    public List<SlotOption> alternativesFor(Long serviceId, Long excludedSlotId) {
+        LocalDate today = LocalDate.now(clock);
+        List<SlotOption> alternatives = search(serviceId, null, today, today.plusDays(MAX_SEARCH_DAYS), "", 6).stream()
+                .filter(option -> excludedSlotId == null || option.slotId() != excludedSlotId)
+                .limit(5)
+                .toList();
+        slotsFoundThisTurn = alternatives;
+        if (!alternatives.isEmpty()) {
+            conversation.offeredSlots(alternatives);
+        }
+        return alternatives;
+    }
+
+    static String describe(List<SlotOption> slots) {
+        if (slots.isEmpty()) {
+            return "none in the next " + MAX_SEARCH_DAYS + " days.";
+        }
+        StringBuilder text = new StringBuilder();
+        for (SlotOption slot : slots) {
+            text.append("slot #").append(slot.slotId()).append(" ").append(slot.provider()).append(" ")
+                    .append(slot.start()).append("; ");
+        }
+        return text.toString().strip();
     }
 
     public List<String> toolsUsed() {

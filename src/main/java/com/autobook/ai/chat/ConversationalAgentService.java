@@ -2,21 +2,20 @@ package com.autobook.ai.chat;
 
 import com.autobook.ai.AiModels;
 import com.autobook.ai.AiProperties;
-import com.autobook.ai.rag.KnowledgeBaseService;
 import com.autobook.exception.AiUnavailableException;
 import com.autobook.exception.ForbiddenOperationException;
 import com.autobook.exception.InvalidRequestException;
 import com.autobook.model.AppUser;
 import com.autobook.model.UserRole;
-import com.autobook.service.AppointmentService;
-import com.autobook.service.SlotService;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -59,24 +58,32 @@ public class ConversationalAgentService {
     private static final Logger log = LoggerFactory.getLogger(ConversationalAgentService.class);
     private static final DateTimeFormatter NOW_FORMAT = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy h:mm a", Locale.US);
 
+    /** Whole-message confirmations, matched by code (not by the model) when an action is pending. */
+    static final Pattern AFFIRMATIVE = Pattern.compile(
+            "(?i)\\s*(yes|y|yeah|yep|confirm|confirmed|yes,? (please|book it|confirm|do it|cancel it)|book it|"
+                    + "go ahead|please do|do it|ok|okay|sure)[.!\\s]*");
+    static final Pattern NEGATIVE = Pattern.compile(
+            "(?i)\\s*(no|n|nope|no thanks|no,? thank you|don't|do not|never ?mind|stop|cancel that)[.!\\s]*");
+
     protected final AiModels aiModels;
     protected final AiProperties properties;
     protected final ConversationStore conversations;
-    protected final SlotService slotService;
-    protected final AppointmentService appointmentService;
-    protected final KnowledgeBaseService knowledgeBase;
+    protected final AgentToolsFactory toolsFactory;
+    protected final PendingActionStore pendingActions;
+    protected final BookingConfirmationService confirmations;
     protected final MeterRegistry meterRegistry;
     protected final Clock clock;
 
     public ConversationalAgentService(AiModels aiModels, AiProperties properties, ConversationStore conversations,
-                                      SlotService slotService, AppointmentService appointmentService,
-                                      KnowledgeBaseService knowledgeBase, MeterRegistry meterRegistry, Clock clock) {
+                                      AgentToolsFactory toolsFactory, PendingActionStore pendingActions,
+                                      BookingConfirmationService confirmations, MeterRegistry meterRegistry,
+                                      Clock clock) {
         this.aiModels = aiModels;
         this.properties = properties;
         this.conversations = conversations;
-        this.slotService = slotService;
-        this.appointmentService = appointmentService;
-        this.knowledgeBase = knowledgeBase;
+        this.toolsFactory = toolsFactory;
+        this.pendingActions = pendingActions;
+        this.confirmations = confirmations;
         this.meterRegistry = meterRegistry;
         this.clock = clock;
     }
@@ -92,7 +99,17 @@ public class ConversationalAgentService {
         Conversation conversation = conversations.get(customer.userId(), conversationId);
 
         synchronized (conversation) {
-            BookingAgentTools tools = newTools(customer, conversation);
+            // A bare "yes" or "no" answers a pending booking or cancellation. This is decided here in code,
+            // so the model can never confirm a write on the customer's behalf.
+            Optional<PendingActionStore.PendingAction> pending = pendingActions.current(customer.userId(), conversationId);
+            if (pending.isPresent() && AFFIRMATIVE.matcher(text).matches()) {
+                return confirmations.confirm(customer, conversationId, pending.get().token()).reply();
+            }
+            if (pending.isPresent() && NEGATIVE.matcher(text).matches()) {
+                return confirmations.decline(customer, conversationId, pending.get().token()).reply();
+            }
+
+            BookingAgentTools tools = toolsFactory.create(customer, conversation);
             String reply;
             try {
                 reply = aiModels.chatClient().prompt()
@@ -121,13 +138,11 @@ public class ConversationalAgentService {
         }
     }
 
-    protected BookingAgentTools newTools(AppUser customer, Conversation conversation) {
-        return new BookingAgentTools(customer, conversation, slotService, appointmentService, knowledgeBase,
-                aiModels.embeddingAvailable(), clock, properties.maxToolCallsPerMessage());
-    }
-
     protected ChatReply.PendingActionView pendingActionView(AppUser customer, Conversation conversation) {
-        return null;
+        return pendingActions.current(customer.userId(), conversation.conversationId())
+                .map(action -> new ChatReply.PendingActionView(action.token(), action.type().name(), action.summary(),
+                        action.expiresAt().atZone(clock.getZone()).toLocalDateTime().toString()))
+                .orElse(null);
     }
 
     protected String systemPrompt(AppUser customer, Conversation conversation) {
@@ -147,7 +162,9 @@ public class ConversationalAgentService {
     }
 
     protected String additionalContext(AppUser customer, Conversation conversation) {
-        return "";
+        return pendingActions.current(customer.userId(), conversation.conversationId())
+                .map(action -> "Waiting for the customer's confirmation (not done yet): " + action.summary() + "\n")
+                .orElse("");
     }
 
     static void requireCustomer(AppUser user) {
