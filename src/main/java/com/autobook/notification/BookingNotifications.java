@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -52,6 +53,17 @@ public class BookingNotifications {
                                 WHEN.format(appointment.startTime()), confirmationNumber(appointment)));
     }
 
+    /**
+     * Queues an appointment reminder (Milestone 4) in the caller's transaction.
+     *
+     * @return the new outbox id, or empty if a reminder for this appointment was already queued
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Long> appointmentReminder(AppointmentDto appointment, String message) {
+        return enqueue(appointment, NotificationType.APPOINTMENT_REMINDER,
+                "Reminder: your upcoming AutoBook appointment", message);
+    }
+
     public static String idempotencyKey(NotificationType type, long appointmentId) {
         return type.name() + "-appointment-" + appointmentId;
     }
@@ -61,12 +73,13 @@ public class BookingNotifications {
         return "AB-%05d".formatted(appointment.appointmentId());
     }
 
-    private void enqueue(AppointmentDto appointment, NotificationType type, String subject, String message) {
+    private Optional<Long> enqueue(AppointmentDto appointment, NotificationType type, String subject, String message) {
         NotificationRequest request = new NotificationRequest(
                 idempotencyKey(type, appointment.appointmentId()), type,
                 appointment.customerEmail(), appointment.customerName(), subject, message,
                 appointment.appointmentId(), confirmationNumber(appointment));
-        outboxRepository.insertIfAbsent(request, LocalDateTime.now(clock))
-                .ifPresent(outboxId -> events.publishEvent(new NotificationEnqueuedEvent(outboxId)));
+        Optional<Long> outboxId = outboxRepository.insertIfAbsent(request, LocalDateTime.now(clock));
+        outboxId.ifPresent(id -> events.publishEvent(new NotificationEnqueuedEvent(id)));
+        return outboxId;
     }
 }

@@ -5,5 +5,7 @@ package com.autobook.notification;
  */
 public enum NotificationType {
     BOOKING_CONFIRMED,
-    BOOKING_CANCELLED
+    BOOKING_CANCELLED,
+    /** Milestone 4: reminder before an upcoming appointment, written by the reminder agent. */
+    APPOINTMENT_REMINDER
 }

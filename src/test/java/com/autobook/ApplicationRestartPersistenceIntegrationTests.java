@@ -70,7 +70,7 @@ class ApplicationRestartPersistenceIntegrationTests {
 			assertEquals(outboxRows, count(secondRun, "SELECT COUNT(*) FROM notification_outbox"));
 
 			// Migrations ran once; the restart did not drop tables or re-insert the seed data.
-			assertEquals(3, count(secondRun, "SELECT COUNT(*) FROM flyway_schema_history WHERE success"));
+			assertEquals(4, count(secondRun, "SELECT COUNT(*) FROM flyway_schema_history WHERE success"));
 			assertEquals(5, count(secondRun, "SELECT COUNT(*) FROM users"));
 			assertEquals(6, count(secondRun, "SELECT COUNT(*) FROM appointments"));
 
