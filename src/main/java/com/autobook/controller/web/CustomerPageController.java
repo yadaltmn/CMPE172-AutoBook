@@ -45,6 +45,12 @@ public class CustomerPageController {
         this.currentUserService = currentUserService;
     }
 
+    /** Milestone 4: the AI assistant page (chat with confirmation, and FAQ). */
+    @GetMapping("/assistant")
+    public String assistant() {
+        return "customer/assistant";
+    }
+
     @GetMapping("/dashboard")
     public String dashboard(Authentication authentication, Model model) {
         AppUser customer = currentUserService.requireUser(authentication);

@@ -56,6 +56,18 @@ appointment_id="$(curl -fsS -c "$COOKIES" -b "$COOKIES" -H "X-CSRF-TOKEN: $token
   -d "{\"slotId\": $slot_id}" "$BASE_URL/api/appointments" | json 'data["appointmentId"]')"
 echo "Booked slot $slot_id as appointment $appointment_id"
 
+echo "== Checking that the AI features report unavailable without a Gemini key (and booking still worked)"
+if [ -z "${GEMINI_API_KEY:-}" ]; then
+  ai_status="$(curl -fsS -b "$COOKIES" "$BASE_URL/api/ai/status" | json 'data["chatAvailable"]')"
+  echo "AI chat available: $ai_status"
+  [ "$ai_status" = "False" ]
+  token="$(csrf_token)"
+  chat_code="$(curl -sS -o /dev/null -w '%{http_code}' -c "$COOKIES" -b "$COOKIES" -H "X-CSRF-TOKEN: $token" \
+    -H "Content-Type: application/json" -d '{"message":"Find an oil change"}' "$BASE_URL/api/ai/chat")"
+  echo "POST /api/ai/chat without a key: HTTP $chat_code"
+  [ "$chat_code" = "503" ]
+fi
+
 echo "== Checking the confirmation notification (admin view of the outbox)"
 login "morgan.lee@example.com"
 notification_status=""

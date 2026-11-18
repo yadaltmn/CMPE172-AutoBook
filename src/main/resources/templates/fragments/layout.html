@@ -31,6 +31,7 @@
                 <th:block th:if="${currentUser != null and currentUser.role.name() == 'CUSTOMER'}">
                     <li class="nav-item"><a class="nav-link" th:href="@{/customer/dashboard}">Dashboard</a></li>
                     <li class="nav-item"><a class="nav-link" th:href="@{/customer/appointments}">My appointments</a></li>
+                    <li class="nav-item"><a class="nav-link" th:href="@{/customer/assistant}">Assistant</a></li>
                 </th:block>
                 <th:block th:if="${currentUser != null and currentUser.role.name() == 'PROVIDER'}">
                     <li class="nav-item"><a class="nav-link" th:href="@{/provider/dashboard}">Dashboard</a></li>

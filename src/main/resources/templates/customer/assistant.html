@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Assistant')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container" id="assistant-page"
+      th:attr="data-csrf-header=${_csrf.headerName},data-csrf-token=${_csrf.token}">
+    <header class="ab-page-header">
+        <h1 class="h2">AutoBook assistant</h1>
+        <p>Ask for open slots, review your appointments, or ask about AutoBook policies.
+            The assistant never books or cancels until you press <strong>Confirm</strong>.</p>
+    </header>
+
+    <div id="ai-unavailable" class="alert alert-warning d-none" role="status">
+        The AI assistant is not configured on this server (no Gemini API key). You can still book from
+        <a th:href="@{/browse}">Available slots</a>.
+    </div>
+
+    <div class="row g-3 mb-4">
+        <section class="col-lg-8" aria-labelledby="chat-title">
+            <div class="ab-card ab-card-body h-100 d-flex flex-column">
+                <h2 id="chat-title" class="h5">Booking chat</h2>
+                <div id="chat-log" class="ab-chat-log flex-grow-1" aria-live="polite">
+                    <div class="ab-chat-msg ab-chat-assistant">Hi! Try "Find the earliest oil change this week"
+                        or "What appointments do I have?"</div>
+                </div>
+
+                <div id="pending-card" class="ab-pending d-none" role="region" aria-label="Waiting for your confirmation">
+                    <p class="ab-eyebrow mb-1">Waiting for your confirmation</p>
+                    <p id="pending-summary" class="fw-semibold mb-2"></p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button id="pending-confirm" type="button" class="btn btn-accent btn-sm">Confirm</button>
+                        <button id="pending-decline" type="button" class="btn btn-outline-secondary btn-sm">Not now</button>
+                    </div>
+                    <p class="ab-muted small mt-2 mb-0">Expires at <span id="pending-expires"></span>.</p>
+                </div>
+
+                <div id="chat-error" class="alert alert-danger d-none mt-2" role="alert"></div>
+
+                <form id="chat-form" class="d-flex gap-2 mt-3" autocomplete="off">
+                    <label for="chat-input" class="visually-hidden">Message</label>
+                    <input id="chat-input" class="form-control" maxlength="1000" required
+                           placeholder="Find the earliest oil change this week">
+                    <button id="chat-send" class="btn btn-primary" type="submit">Send</button>
+                </form>
+            </div>
+        </section>
+
+        <section class="col-lg-4" aria-labelledby="faq-title">
+            <div class="ab-card ab-card-body h-100">
+                <h2 id="faq-title" class="h5">Policy questions</h2>
+                <p class="ab-muted small">Answers come only from the AutoBook knowledge base, with sources.</p>
+                <form id="faq-form" class="d-flex flex-column gap-2" autocomplete="off">
+                    <label for="faq-input" class="visually-hidden">Question</label>
+                    <input id="faq-input" class="form-control" maxlength="500" required
+                           placeholder="What is the cancellation policy?">
+                    <button id="faq-send" class="btn btn-outline-primary" type="submit">Ask</button>
+                </form>
+                <div id="faq-answer" class="mt-3" aria-live="polite"></div>
+            </div>
+        </section>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+<script th:src="@{/js/assistant.js}"></script>
+</body>
+</html>
