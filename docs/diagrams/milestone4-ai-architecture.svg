@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900" font-family="Times New Roman, Times, serif" font-size="14" fill="#000">
+  <title>AutoBook Milestone 4 AI architecture and data flow</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1200" height="900" fill="#fff"/>
+  <text x="600" y="30" text-anchor="middle" font-size="20" font-weight="bold">AutoBook Milestone 4: Enterprise AI agents on the existing service layer</text>
+
+  <!-- Clients -->
+  <rect x="20" y="60" width="190" height="96" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="115" y="84" text-anchor="middle" font-weight="bold" font-size="15">Customer</text>
+  <text x="115" y="104" text-anchor="middle" font-size="13">Assistant page / API</text>
+  <text x="115" y="122" text-anchor="middle" font-size="12">POST /api/ai/chat</text>
+  <text x="115" y="138" text-anchor="middle" font-size="12">POST /api/ai/chat/confirm</text>
+  <text x="115" y="152" text-anchor="middle" font-size="12">POST /api/ai/faq</text>
+
+  <rect x="20" y="420" width="190" height="80" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="115" y="444" text-anchor="middle" font-weight="bold" font-size="15">Admin</text>
+  <text x="115" y="464" text-anchor="middle" font-size="12">POST /api/admin/ai/</text>
+  <text x="115" y="480" text-anchor="middle" font-size="12">reminders/run</text>
+
+  <!-- App boundary -->
+  <rect x="240" y="48" width="690" height="520" fill="none" stroke="#000" stroke-width="2.5"/>
+  <text x="585" y="70" text-anchor="middle" font-weight="bold" font-size="16">AutoBook (Spring Boot 4.1, Java 21, Spring AI 2.0.2)</text>
+  <rect x="260" y="82" width="650" height="34" fill="#fff" stroke="#000"/>
+  <text x="585" y="104" text-anchor="middle" font-size="13">Spring Security: session login, CSRF, roles (CUSTOMER chat, ADMIN jobs); user resolved from the principal</text>
+
+  <!-- Agent 1 -->
+  <rect x="260" y="128" width="320" height="196" fill="#fff" stroke="#000" stroke-width="1.5"/>
+  <text x="420" y="148" text-anchor="middle" font-weight="bold">Agent 1: ConversationalAgentService</text>
+  <text x="272" y="170" font-size="13">ChatClient + function calling (max 8 tools)</text>
+  <text x="272" y="188" font-size="13">BookingAgentTools bound to signed-in customer:</text>
+  <text x="282" y="205" font-size="12">searchAvailableSlots, listMyAppointments,</text>
+  <text x="282" y="221" font-size="12">listServicesAndProviders, searchKnowledgeBase,</text>
+  <text x="282" y="237" font-size="12">requestBooking, requestCancellation (prepare only)</text>
+  <text x="272" y="258" font-size="13">ConversationStore: memory per (user, conversation)</text>
+  <text x="272" y="278" font-size="13">PendingActionStore: token, owner, 5-min expiry</text>
+  <text x="272" y="298" font-size="13">"yes"/"no" matched in code, not by the model</text>
+  <text x="272" y="316" font-size="12" font-style="italic">The model has no tool that writes.</text>
+
+  <!-- Confirmation -->
+  <rect x="260" y="338" width="320" height="64" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="420" y="358" text-anchor="middle" font-weight="bold">BookingConfirmationService</text>
+  <text x="420" y="376" text-anchor="middle" font-size="12">claim token (same customer, conversation, unexpired)</text>
+  <text x="420" y="393" text-anchor="middle" font-size="12">409 + alternatives if the slot was taken</text>
+
+  <!-- Existing services -->
+  <rect x="260" y="416" width="320" height="74" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="420" y="436" text-anchor="middle" font-weight="bold">Existing services (Milestones 2–3)</text>
+  <text x="420" y="454" text-anchor="middle" font-size="12">BookingService.book: row lock, re-check, unique constraint</text>
+  <text x="420" y="470" text-anchor="middle" font-size="12">AppointmentService.cancel: ownership; SlotService search</text>
+  <text x="420" y="486" text-anchor="middle" font-size="12">BookingNotifications → transactional outbox</text>
+
+  <!-- Agent 3 -->
+  <rect x="600" y="128" width="310" height="140" fill="#fff" stroke="#000" stroke-width="1.5"/>
+  <text x="755" y="148" text-anchor="middle" font-weight="bold">Agent 3: RAG question answering</text>
+  <text x="612" y="170" font-size="13">KnowledgeBaseService: knowledge/autobook-faq.md</text>
+  <text x="622" y="187" font-size="12">1 chunk per section → embeddings →</text>
+  <text x="622" y="203" font-size="12">SimpleVectorStore (cosine, top-k, threshold)</text>
+  <text x="612" y="224" font-size="13">RagQuestionAnswerService:</text>
+  <text x="622" y="241" font-size="12">only retrieved excerpts go to Gemini, cited [n];</text>
+  <text x="622" y="257" font-size="12">nothing retrieved → "not covered", no model call</text>
+
+  <!-- Agent 2 -->
+  <rect x="600" y="290" width="310" height="164" fill="#fff" stroke="#000" stroke-width="1.5"/>
+  <text x="755" y="310" text-anchor="middle" font-weight="bold">Agent 2: ReminderAgentService</text>
+  <text x="612" y="332" font-size="13">ReminderScheduler @Scheduled (15 min, no session)</text>
+  <text x="612" y="350" font-size="13">and the admin trigger run the same workflow:</text>
+  <text x="622" y="368" font-size="12">1. booked appointments starting within 24 h</text>
+  <text x="622" y="384" font-size="12">2. Gemini writes the reminder (outside any transaction)</text>
+  <text x="622" y="400" font-size="12">3. one transaction: outbox row + appointment_reminders</text>
+  <text x="622" y="416" font-size="12">   (unique keys: no duplicates, survives restart)</text>
+  <text x="622" y="432" font-size="12">Gemini fails: defer, or labelled TEMPLATE near the time</text>
+  <text x="622" y="448" font-size="12">Metrics: autobook.ai.reminders{outcome}</text>
+
+  <!-- Dispatcher -->
+  <rect x="600" y="476" width="310" height="70" fill="#fff" stroke="#000" stroke-width="1.5"/>
+  <text x="755" y="496" text-anchor="middle" font-weight="bold">NotificationDispatcher (Milestone 3)</text>
+  <text x="755" y="514" text-anchor="middle" font-size="12">after commit · timeout · retries · idempotency key</text>
+  <text x="755" y="530" text-anchor="middle" font-size="12">NotificationGateway → HTTP</text>
+
+  <!-- Gemini -->
+  <rect x="960" y="120" width="220" height="140" fill="#fff" stroke="#000" stroke-width="2.5"/>
+  <text x="1070" y="146" text-anchor="middle" font-weight="bold" font-size="15">Gemini Developer API</text>
+  <text x="1070" y="166" text-anchor="middle" font-size="12" font-style="italic">Google AI Studio key (not Vertex AI)</text>
+  <text x="975" y="194" font-size="13">chat: gemini-3.5-flash</text>
+  <text x="975" y="214" font-size="13">embeddings:</text>
+  <text x="985" y="232" font-size="13">gemini-embedding-001</text>
+  <text x="975" y="252" font-size="12">(configurable; used by Agents 1, 2, 3)</text>
+
+  <!-- Mock notification -->
+  <rect x="960" y="476" width="220" height="70" fill="#fff" stroke="#000" stroke-width="2.5"/>
+  <text x="1070" y="500" text-anchor="middle" font-weight="bold">Notification service</text>
+  <text x="1070" y="518" text-anchor="middle" font-size="12">(mock, Milestone 3)</text>
+  <text x="1070" y="534" text-anchor="middle" font-size="12">delivers each key once</text>
+
+  <!-- PostgreSQL -->
+  <path d="M330,690 a150,14 0 0,0 300,0 v80 a150,14 0 0,1 -300,0 z" fill="#fff" stroke="#000" stroke-width="2"/>
+  <ellipse cx="480" cy="690" rx="150" ry="14" fill="#fff" stroke="#000" stroke-width="2"/>
+  <text x="480" y="724" text-anchor="middle" font-weight="bold">PostgreSQL 16 (Flyway V1–V4)</text>
+  <text x="480" y="744" text-anchor="middle" font-size="12">appointments · availability_slots · notification_outbox</text>
+  <text x="480" y="760" text-anchor="middle" font-size="12">appointment_reminders (new in V4)</text>
+
+  <!-- Arrows -->
+  <line x1="210" y1="110" x2="258" y2="140" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="420" y1="324" x2="420" y2="336" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="430" y="334" font-size="11">confirm</text>
+  <line x1="420" y1="402" x2="420" y2="414" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="580" y1="210" x2="598" y2="210" stroke="#000" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="580" y1="250" x2="598" y2="250" stroke="#000" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <line x1="420" y1="490" x2="450" y2="674" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="755" y1="546" x2="600" y2="680" stroke="#000" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+  <path d="M210,150 L230,150 L230,121 L590,121 L590,190 L598,190" fill="none" stroke="#000" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M210,470 L250,470 L250,505 L590,505 L590,372 L598,372" fill="none" stroke="#000" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="262" y="519" font-size="11">manual trigger</text>
+  <line x1="910" y1="511" x2="958" y2="511" stroke="#000" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <line x1="910" y1="200" x2="958" y2="200" stroke="#000" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="910" y1="370" x2="1000" y2="262" stroke="#000" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="935" y="335" font-size="11">reminder text</text>
+  <text x="600" y="850" text-anchor="middle" font-size="13">AiModels: Gemini beans exist only when GEMINI_API_KEY is set; otherwise the AI endpoints answer 503 and booking is unaffected.</text>
+  <text x="600" y="872" text-anchor="middle" font-size="13">Observability: INFO/WARN/ERROR logs, /health, metrics autobook.ai.chat.messages, autobook.ai.agent.confirmations, autobook.ai.faq.questions, autobook.ai.reminders.</text>
+</svg>

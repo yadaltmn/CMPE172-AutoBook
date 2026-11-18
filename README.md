@@ -14,7 +14,30 @@ access control, the booking workflow with transactional double-booking protectio
 availability management, a Thymeleaf/Bootstrap website, and an integration test suite. Milestone 3 moves AutoBook to
 Java 21 and a persistent PostgreSQL database, adds a distribution boundary to an external notification service
 (commit-then-notify with timeouts, retries, idempotency, and fallback), health checks and metrics, Docker, and
-GitHub Actions CI.
+GitHub Actions CI. Milestone 4 adds three AI agents built on Spring AI and Google Gemini that work through the
+existing service layer: a conversational booking assistant, a scheduled reminder agent, and grounded FAQ answers
+with retrieval-augmented generation (RAG).
+
+## Milestone 4 Features: Enterprise AI
+
+- **Agent 1, conversational booking assistant** (`POST /api/ai/chat`, customers only): Spring AI `ChatClient` with
+  function calling. Tools search open slots (with clarification and alternatives), list the signed-in customer's
+  appointments, look up policies, and *prepare* bookings or cancellations. Multi-turn memory per customer and
+  conversation.
+- **Confirmation-before-write, enforced in code:** the model has no tool that writes. A prepared action is a
+  single-use token bound to the customer and conversation that expires after 5 minutes. Only
+  `POST /api/ai/chat/confirm` (or a bare "yes", matched in code) executes it, through the existing transactional
+  `BookingService` / `AppointmentService`. Double booking stays impossible (tested with concurrent agent bookings).
+- **Agent 2, scheduled reminder agent** (`@Scheduled`, every 15 minutes, no user session; admin trigger
+  `POST /api/admin/ai/reminders/run`): Gemini writes personalized reminders for appointments in the next 24 hours,
+  delivered through the Milestone 3 notification outbox. Never sends a duplicate; reminder tracking is stored in
+  PostgreSQL (Flyway V4).
+- **Agent 3, grounded FAQ with RAG** (`POST /api/ai/faq`): the knowledge source
+  `src/main/resources/knowledge/autobook-faq.md` is chunked by section, embedded, and stored in a Spring AI
+  `SimpleVectorStore`; only the retrieved sections are given to Gemini, and answers cite them. Questions the knowledge
+  base doesn't cover are refused without calling the model.
+- **Safe without a key:** if no Gemini key is configured, AutoBook starts normally, booking works, and the AI endpoints
+  answer 503. Assistant page at `/customer/assistant`.
 
 ## Milestone 3 Features
 
@@ -57,6 +80,8 @@ GitHub Actions CI.
 - Spring Web MVC, Spring Security, Spring JDBC (`JdbcTemplate`), Bean Validation
 - PostgreSQL 16, Flyway database migrations
 - Spring Boot Actuator and Micrometer (health and metrics)
+- Spring AI 2.0.2 with Google GenAI (Gemini Developer API): chat `gemini-3.5-flash`, embeddings
+  `gemini-embedding-001`, `SimpleVectorStore`
 - Thymeleaf, Bootstrap 5.3 (bundled as a WebJar, so the site works offline)
 - Docker, Docker Compose, GitHub Actions
 - JUnit 5, Spring Boot Test, MockMvc, Spring Security Test, Testcontainers (PostgreSQL)
@@ -70,6 +95,24 @@ GitHub Actions CI.
 - **JDK 21** (`java -version` must report 21) to build or run AutoBook outside Docker. Maven is provided by the
   wrapper (`./mvnw`, or `mvnw.cmd` on Windows).
 - Git.
+- Optional: a **Gemini API key** from Google AI Studio for the AI features (see below).
+
+## Gemini API Key (Milestone 4)
+
+1. Sign in at <https://aistudio.google.com/apikey> with a Google account and choose **Create API key**. The Gemini
+   Developer API has a free tier; AutoBook uses the Developer API, not Vertex AI, so no Google Cloud project,
+   region, or service account is needed.
+2. Put the key in your `.env` file (git-ignored, never commit it):
+   ```bash
+   GEMINI_API_KEY=your-key-here
+   ```
+3. Start with Docker Compose as below. Compose turns the AI provider on automatically when `GEMINI_API_KEY` is
+   set. To run with Maven instead, export both `GEMINI_API_KEY` and `AUTOBOOK_AI_PROVIDER=google-genai`.
+4. Check: sign in and open `/api/ai/status`; `chatAvailable` and `embeddingAvailable` should be `true`.
+
+Models are configurable with `GEMINI_CHAT_MODEL` (default `gemini-3.5-flash`) and `GEMINI_EMBEDDING_MODEL`
+(default `gemini-embedding-001`). Spring AI's own defaults (`gemini-2.5-flash`, `text-embedding-004`) have been shut
+down by Google, so AutoBook sets both explicitly.
 
 ## How to Run
 
@@ -123,9 +166,17 @@ Docker must be running; the tests start PostgreSQL 16 containers with Testcontai
 ./mvnw clean verify
 ```
 
-The suite has 114 tests in 15 test classes (see [Automated tests](#automated-tests)); all of them pass in GitHub
-Actions on Java 21 and PostgreSQL 16. CI runs the same command plus the Docker Compose smoke test on every push
-(`.github/workflows/ci.yml`).
+The suite has 177 tests in 26 test classes (114 from Milestones 1–3 and 63 for Milestone 4; see
+[Automated tests](#automated-tests)). CI runs the same command plus the Docker Compose smoke test on every push
+(`.github/workflows/ci.yml`). The AI tests never call Gemini: they use a scripted chat model and a keyword embedding
+model (`src/test/java/com/autobook/ai`), so they prove AutoBook's wiring, security, and transactions, not the quality
+of live Gemini answers.
+
+**Milestone 4 verification status.** The last CI run (44247167160, commit `944c97d`) compiled all code and ran all
+177 tests: the 9 unit tests (`PendingActionStoreTests`, `KnowledgeSourceChunkingTests`) passed, and the 168
+integration tests could not start because Spring AI's embedding connection auto-configuration required Vertex AI
+settings when no Gemini key is set. Commit `b431a55` fixes that startup error. The integration tests have not been run
+since, so they are not yet verified; run `./mvnw clean verify` (or CI) to verify them.
 
 ## Test Login Credentials
 
@@ -318,6 +369,85 @@ curl -s -b a.txt -X PUT -H "X-CSRF-TOKEN: $T" -H "Content-Type: application/json
      -d '{"unavailable":false,"failNextRequests":0,"delayMillis":0}' $B/mock-notifications/api/faults
 ```
 
+## AI Agents (Milestone 4)
+
+**Agent 1: conversational booking assistant** (`com.autobook.ai.chat`)
+
+- `AiChatController` resolves the customer from the Spring Security session; requests carry no user id.
+- `ConversationalAgentService` calls Gemini through `ChatClient` with a system prompt (rules, today's date, and the
+  slots offered earlier), the conversation's last 10 turns, and a `BookingAgentTools` object created for this
+  customer and message. At most 8 tool calls per message.
+- Tools: `searchAvailableSlots` (service/shop/date range/time of day; clarification for unknown or ambiguous names;
+  nearest alternatives when nothing matches), `listMyAppointments`, `listServicesAndProviders`, `searchKnowledgeBase`,
+  `requestBooking`, and `requestCancellation`. The last two only validate and create a pending action.
+- `PendingActionStore` holds pending actions: a random single-use token, bound to the customer and conversation,
+  expiring after 5 minutes, at most one per conversation.
+- `BookingConfirmationService` executes a pending action after `POST /api/ai/chat/confirm` or a bare "yes", via
+  `BookingService.book` (row lock, re-check, unique constraint) or `AppointmentService.cancel` (ownership). If the
+  slot was taken meanwhile it answers 409 with alternatives.
+
+**Agent 2: scheduled reminder agent** (`com.autobook.ai.reminder`)
+
+- `ReminderScheduler` (`@Scheduled`) and `POST /api/admin/ai/reminders/run` both call `ReminderAgentService.run`.
+- Each run selects booked appointments starting within 24 hours with no reminder, asks Gemini for a 2–3 sentence
+  reminder from minimal facts (first name, service, shop, time, confirmation number; never the email), and in one
+  transaction writes the outbox row (key `APPOINTMENT_REMINDER-appointment-<id>`) and an `appointment_reminders` row.
+  The outbox delivers it after commit with Milestone 3's timeout, retries, and idempotency.
+- If Gemini fails, the reminder waits for a later run while the appointment is more than 6 hours away; closer than
+  that, a fixed template is sent and recorded as `TEMPLATE` (never as AI-written). Without a key, the template is used.
+- `GET /api/admin/ai/reminders` shows recent reminders with text, author (`GEMINI`/`TEMPLATE`), and delivery status.
+
+**Agent 3: grounded FAQ** (`com.autobook.ai.rag`)
+
+- Knowledge source: `src/main/resources/knowledge/autobook-faq.md` (real AutoBook rules plus clearly labelled
+  *demonstration policies*, such as business hours, where AutoBook has none).
+- `KnowledgeBaseService` makes one chunk per `##` section, embeds the chunks on first use, and stores them in a
+  `SimpleVectorStore`. Retrieval returns the top 4 sections with cosine similarity of at least 0.6
+  (`autobook.ai.faq.*`).
+- `RagQuestionAnswerService` sends only the retrieved sections to Gemini, numbered for citation, with rules to answer
+  only from them. If nothing is retrieved it replies that the knowledge base doesn't cover the question, without
+  calling the model.
+
+Diagram: `docs/diagrams/milestone4-ai-architecture.svg` (and `.png`).
+
+## Milestone 4 Demo
+
+Use future appointments created during the demo; the seed appointments may already be in the past. Don't delete the
+database volume. Start with `GEMINI_API_KEY` set in `.env` and `docker compose up -d --build`.
+
+**Demo A, conversational agent** (browser): sign in as `jada.nguyen@example.com` / `password123`, open
+**Assistant**.
+
+1. "Find the earliest oil change this week." The reply lists real slots (`toolsUsed` in the API response shows
+   `searchAvailableSlots`).
+2. "Book the first one." The assistant shows a **Confirm** card; nothing is booked yet (check My appointments).
+3. Press **Confirm**. The reply shows a confirmation number, and the appointment appears under My appointments and
+   in PostgreSQL: `docker compose exec db psql -U autobook -d autobook -c "SELECT appointment_id, slot_id, status FROM appointments ORDER BY appointment_id DESC LIMIT 3;"`
+4. Sign in as `alex.rivera@example.com` and try to book the same slot (website or assistant): it's rejected as
+   already booked.
+
+**Demo B, autonomous agent** (terminal; the admin session uses the CSRF flow from the failure demo above):
+
+```bash
+B=http://localhost:8080
+T=$(curl -s -c a.txt -b a.txt $B/api/csrf | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+curl -s -c a.txt -b a.txt -d "username=morgan.lee@example.com&password=password123&_csrf=$T" $B/login -o /dev/null
+T=$(curl -s -c a.txt -b a.txt $B/api/csrf | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+curl -s -b a.txt -X POST -H "X-CSRF-TOKEN: $T" $B/api/admin/ai/reminders/run      # queuedByGemini >= 1
+curl -s -b a.txt $B/api/admin/ai/reminders                                        # Gemini's text, GEMINI, SENT
+curl -s -b a.txt $B/mock-notifications/api/notifications                          # delivered by the notification service
+curl -s -b a.txt -X POST -H "X-CSRF-TOKEN: $T" $B/api/admin/ai/reminders/run      # second run: nothing queued again
+```
+
+A reminder needs a booked appointment starting within the next 24 hours. If there is none, sign in as a provider,
+add a slot for tomorrow under Availability, and book it as a customer first.
+
+**Demo C, grounded Q&A** (Assistant page, Policy questions panel):
+
+1. "What is the cancellation policy?" The answer cites `[1] Cancellation policy`.
+2. "Can I reschedule an appointment?" The answer cites the Rescheduling section.
+3. "What is the capital of France?" The assistant says the knowledge base doesn't cover it.
+
 ## API Endpoints
 
 | Method | Path | Access | Purpose |
@@ -328,6 +458,12 @@ curl -s -b a.txt -X PUT -H "X-CSRF-TOKEN: $T" -H "Content-Type: application/json
 | GET | `/api/slots/{id}` | Public | Slot details |
 | GET | `/api/providers`, `/api/services` | Public | Filter options |
 | GET | `/api/csrf` | Public | CSRF token for API clients |
+| GET | `/api/ai/status` | Signed in | Whether the Gemini chat and embedding models are configured |
+| POST | `/api/ai/chat` `{conversationId?, message}` | Customer | Conversational booking assistant |
+| POST | `/api/ai/chat/confirm` `{conversationId, token, confirm}` | Customer | Confirm (or decline) a prepared booking/cancellation |
+| POST | `/api/ai/faq` `{question}` | Signed in | Grounded answer from the knowledge base, with sources |
+| POST | `/api/admin/ai/reminders/run` | Admin | Run the reminder agent now (same workflow as the scheduler) |
+| GET | `/api/admin/ai/reminders` | Admin | Recent reminders: text, author, delivery status |
 | GET | `/api/me` | Signed in | Current user and roles |
 | POST | `/api/appointments` `{slotId, serviceId?}` | Customer | Book (201 / 400 / 404 / 409) |
 | GET | `/api/appointments/me` | Customer | `{upcoming, history}` |
@@ -385,6 +521,17 @@ Screenshots of every page, taken from the running application, are in `docs/scre
 | `NotificationOutboxIntegrationTests` | 10 | Commit-then-notify, outage fallback and recovery, retries, timeout + idempotency, FAILED, rollback |
 | `HealthAndMetricsIntegrationTests` | 6 | `/health` with database check, probes, metrics access and booking counters |
 | `ApplicationRestartPersistenceIntegrationTests` | 1 | Bookings, history, and outbox survive an application restart |
+| `AiConfigurationIntegrationTests` | 5 | Starts without a Gemini key, AI endpoints 503, no Vertex settings, no key in config |
+| `AiModelsWithTestModelIntegrationTests` | 2 | ChatClient uses the configured model; status reports AI available |
+| `AssistantPageIntegrationTests` | 2 | Assistant page renders with CSRF token; customers only |
+| `KnowledgeSourceChunkingTests` | 3 | Knowledge file split into one chunk per section; demonstration policies labelled |
+| `RagIntegrationTests` | 8 | Ingestion, retrieval ranking, grounding on retrieved sections only, unsupported questions, validation, security |
+| `ConversationalAgentIntegrationTests` | 13 | Auth, roles, CSRF, validation, tool calls, identity, clarification, alternatives, memory and isolation, tool bound |
+| `AgentBookingConfirmationIntegrationTests` | 11 | Confirmation-before-write, "yes", prompt injection, token ownership, replay, conflict, cancellation ownership |
+| `AgentBookingConcurrencyIntegrationTests` | 2 | Agent booking racing a direct booking (and another agent booking): exactly one booking in PostgreSQL |
+| `PendingActionStoreTests` | 6 | Single use, owner only, conversation only, expiry, replacement |
+| `ReminderAgentIntegrationTests` | 10 | Selection, Gemini text and delivery, no duplicates, admin trigger and security, outage isolation, Gemini failure |
+| `ReminderRestartPersistenceIntegrationTests` | 1 | Reminders are not repeated after a restart; template without a key |
 
 All tests run against PostgreSQL 16 (Testcontainers). Classes that commit data (concurrency, notifications, restart)
 use their own database so the seed data other classes rely on stays unchanged.
@@ -400,6 +547,10 @@ src/main/java/com/autobook/
   dto/               Request/response records
   exception/         Domain exceptions and ApiExceptionHandler
   model/             AppUser, AppointmentStatus, UserRole, SlotLock
+  ai/                Milestone 4: AiModels (Gemini access), AiProperties, status endpoint
+  ai/chat/           Agent 1: chat controller, agent service, tools, conversation memory, pending confirmations
+  ai/reminder/       Agent 2: reminder scheduler, agent service, Gemini text generator, admin endpoints
+  ai/rag/            Agent 3: knowledge base (SimpleVectorStore) and grounded FAQ
   notification/      NotificationRequest, NotificationGateway, outbox, dispatcher, retry sender
   mocknotification/  Mock external notification service (controller, service, fault switches)
   observability/     Booking and notification metrics, outbox health indicator
@@ -407,15 +558,17 @@ src/main/java/com/autobook/
   service/           Business logic and transactions
 src/main/resources/
   application.properties
-  db/migration/      Flyway scripts V1 (schema), V2 (demo data), V3 (notification outbox)
+  db/migration/      Flyway scripts V1 (schema), V2 (demo data), V3 (notification outbox), V4 (reminders)
+  knowledge/         autobook-faq.md, the RAG knowledge source
   templates/         Thymeleaf pages
   static/css, static/js
 src/test/            Integration tests and test configuration (Testcontainers PostgreSQL)
 scripts/             compose-smoke-test.sh
 Dockerfile, docker-compose.yml, .env.example, .github/workflows/ci.yml
 docs/
-  AutoBook_Milestone_3_Report.pdf (+ .html source), diagrams/distribution-diagram.svg/.png,
-  Milestone_3_Code_Walkthrough_Script.md, and the Milestone 1 and 2 reports, diagrams, and screenshots
+  AutoBook_Milestone_4_Report.pdf (+ .html source), diagrams/milestone4-ai-architecture.svg/.png,
+  Milestone_4_Code_Walkthrough_Script.md (demos A, B, C), and the Milestone 1–3 reports, diagrams,
+  walkthrough scripts, and screenshots
 ```
 
 ## Inspecting the Database
@@ -435,3 +588,7 @@ notification_outbox;`. The admin dashboard and `/api/admin/*` endpoints show the
 - Times are local times in the configured time zone (`AUTOBOOK_TIMEZONE`); there is no per-user time-zone handling.
 - Demo slot times are relative to the day the database was created; they become past slots over time.
 - No self-service registration or password reset.
+- AI (Milestone 4): live Gemini answers are not covered by automated tests (they use test doubles). Conversation
+  memory and pending confirmations are kept in memory, so a restart clears them (bookings and reminders are in
+  PostgreSQL). The knowledge-base index is rebuilt in memory on first use after each start. The FAQ similarity
+  threshold (0.6) was not calibrated against live Gemini embeddings and may need tuning.
