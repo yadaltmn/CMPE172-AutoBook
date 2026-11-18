@@ -42,6 +42,11 @@ public class ApiExceptionHandler {
         return build(HttpStatus.NOT_FOUND, "The requested resource was not found.", request);
     }
 
+    @ExceptionHandler(AiUnavailableException.class)
+    public ResponseEntity<ApiErrorDto> handleAiUnavailable(AiUnavailableException ex, HttpServletRequest request) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(BookingConflictException.class)
     public ResponseEntity<ApiErrorDto> handleConflict(BookingConflictException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, ex.getMessage(), request);

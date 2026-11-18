@@ -43,6 +43,9 @@ public class SecurityConfig {
                 .requestMatchers("/customer/**", "/api/appointments/**").hasRole("CUSTOMER")
                 .requestMatchers("/provider/**", "/api/provider/**").hasRole("PROVIDER")
                 .requestMatchers("/admin/**", "/api/admin/**").hasRole("ADMIN")
+                // Milestone 4: the booking assistant acts for the signed-in customer only; the FAQ and
+                // AI status need any signed-in user (anyRequest below); AI admin jobs fall under /api/admin/**.
+                .requestMatchers("/api/ai/chat", "/api/ai/chat/**").hasRole("CUSTOMER")
                 // Mock external notification service: delivery is open to AutoBook's gateway,
                 // inspecting deliveries and injecting faults is for admins only.
                 // Health and info are public for load balancers and Docker; metrics are admin only.
