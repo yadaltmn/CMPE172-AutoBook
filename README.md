@@ -172,11 +172,10 @@ The suite has 177 tests in 26 test classes (114 from Milestones 1–3 and 63 for
 model (`src/test/java/com/autobook/ai`), so they prove AutoBook's wiring, security, and transactions, not the quality
 of live Gemini answers.
 
-**Milestone 4 verification status.** The last CI run (44247167160, commit `944c97d`) compiled all code and ran all
-177 tests: the 9 unit tests (`PendingActionStoreTests`, `KnowledgeSourceChunkingTests`) passed, and the 168
-integration tests could not start because Spring AI's embedding connection auto-configuration required Vertex AI
-settings when no Gemini key is set. Commit `b431a55` fixes that startup error. The integration tests have not been run
-since, so they are not yet verified; run `./mvnw clean verify` (or CI) to verify them.
+**Milestone 4 verification status.** CI run 44250690275 (commit `b431a55`) ran all 177 tests: 176 passed,
+including every Milestone 1–3 test and the required agent concurrency test. The one failure,
+`ReminderAgentIntegrationTests.adminTriggerRunsTheRealReminderJob`, expected a reminder without the confirmation
+number that AutoBook appends by design; commit `4b83971` corrects that expectation and has not been re-run in CI yet.
 
 ## Test Login Credentials
 

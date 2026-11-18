@@ -355,28 +355,32 @@ that Spring AI's <code>ChatClient</code> attaches to each prompt (as Gemini's fu
 keyword embedding model. They verify AutoBook's wiring, security, transactions, retrieval, and grounding. They do not verify
 the quality of live Gemini answers. The integration tests use real PostgreSQL 16 containers (Testcontainers).</p>
 <h3>Verification status</h3>
-<p>The tests were run on GitHub Actions (run 44247167160, commit <code>944c97d</code>). That run executed
-177 tests in 26 classes (63 of them new in Milestone 4); 9 passed, 0 failed, and 168 could not run. All production and test code compiled. Every integration test that starts the Spring application stopped
-before its first assertion, for one reason: Spring AI 2.0.2's <code>GoogleGenAiEmbeddingConnectionAutoConfiguration</code>
-always creates its connection bean, even when embeddings are turned off, and without an API key it switches to Vertex AI
-mode and stops startup with "Google GenAI project-id must be set". That affected the Milestone 1–3 tests as well. Commit
-<code>b431a55</code> excludes that auto-configuration and creates the Gemini Developer API connection only when Gemini is
-enabled. In the table, "Did not run" means the test stopped at this startup error. <b>The test suite has not been run since that fix, so the integration tests below (including the
-concurrency test) are written but not yet verified.</b> No result in this report is claimed beyond what the CI run
-showed.</p>
+<p>The full suite ran on GitHub Actions in run 44250690275 (commit <code>b431a55</code>) against PostgreSQL 16
+containers. That run executed 177 tests in 26 classes (63 of them new in Milestone 4); 176 passed, 1 failed, and 0 errors. Every Milestone 1–3 test passed, as did every Milestone 4 test except one,
+including the professor's required concurrency test (<code>AgentBookingConcurrencyIntegrationTests</code>).</p>
+<p>The one failure, <code>adminTriggerRunsTheRealReminderJob</code>, was an incorrect expectation in the test, not a defect
+in the reminder agent: when the generated text does not contain the confirmation number, <code>ReminderTextGenerator</code>
+appends it (as designed, so every reminder carries it), but the test expected the text without it. The run showed the
+admin-triggered job did queue and record the reminder, and only the final message comparison failed. Commit
+<code>4b83971</code> corrects the expected message to the exact full text. <b>That correction has not been re-run in CI
+yet.</b></p>
+<p>An earlier run (44247167160, commit <code>944c97d</code>) had failed at application startup because Spring AI
+2.0.2's <code>GoogleGenAiEmbeddingConnectionAutoConfiguration</code> always creates its connection bean and, without a key,
+demands Vertex AI settings; commit <code>b431a55</code> fixed that by creating the Gemini Developer API connection only
+when Gemini is enabled.</p>
 <table class="ai"><tr><th>Milestone 4 test class</th><th>What it verifies</th><th>Tests</th><th>CI result</th></tr>
-<tr><td><code>AiConfigurationIntegrationTests</code></td><td>Starts with no Gemini key; AI endpoints answer 503; bookings still work; no Vertex AI settings or keys in configuration</td><td>5</td><td>Did not run</td></tr>
-<tr><td><code>AiModelsWithTestModelIntegrationTests</code></td><td>ChatClient is built when a chat model bean exists</td><td>2</td><td>Did not run</td></tr>
+<tr><td><code>AiConfigurationIntegrationTests</code></td><td>Starts with no Gemini key; AI endpoints answer 503; bookings still work; no Vertex AI settings or keys in configuration</td><td>5</td><td>Passed (5/5)</td></tr>
+<tr><td><code>AiModelsWithTestModelIntegrationTests</code></td><td>ChatClient is built when a chat model bean exists</td><td>2</td><td>Passed (2/2)</td></tr>
 <tr><td><code>KnowledgeSourceChunkingTests</code></td><td>Knowledge file splits into one chunk per section; demonstration policies are labelled</td><td>3</td><td>Passed (3/3)</td></tr>
-<tr><td><code>RagIntegrationTests</code></td><td>Relevant sections retrieved; only those sent to the model; sources returned; unsupported questions refused without a model call</td><td>8</td><td>Did not run</td></tr>
-<tr><td><code>ConversationalAgentIntegrationTests</code></td><td>Tool calling through ChatClient, identity from the principal, ownership, clarification, alternatives, memory, roles, CSRF, limits</td><td>13</td><td>Did not run</td></tr>
+<tr><td><code>RagIntegrationTests</code></td><td>Relevant sections retrieved; only those sent to the model; sources returned; unsupported questions refused without a model call</td><td>8</td><td>Passed (8/8)</td></tr>
+<tr><td><code>ConversationalAgentIntegrationTests</code></td><td>Tool calling through ChatClient, identity from the principal, ownership, clarification, alternatives, memory, roles, CSRF, limits</td><td>13</td><td>Passed (13/13)</td></tr>
 <tr><td><code>PendingActionStoreTests</code></td><td>Pending actions: single use, expiry, owner and conversation checks</td><td>6</td><td>Passed (6/6)</td></tr>
-<tr><td><code>AgentBookingConfirmationIntegrationTests</code></td><td>Nothing written before confirmation; confirm books through BookingService; decline; foreign or expired tokens; prompt injection; conflict alternatives; cancellation</td><td>11</td><td>Did not run</td></tr>
-<tr><td><code>AgentBookingConcurrencyIntegrationTests</code></td><td>Professor&#x27;s required test: concurrent agent and direct bookings of one slot, exactly one succeeds, verified in PostgreSQL</td><td>2</td><td>Did not run</td></tr>
-<tr><td><code>ReminderAgentIntegrationTests</code></td><td>Scheduled/manual runs, Gemini text through the outbox, no duplicates, concurrent runs, Gemini failure fallback, admin-only endpoint with CSRF</td><td>10</td><td>Did not run</td></tr>
-<tr><td><code>ReminderRestartPersistenceIntegrationTests</code></td><td>Reminders are not resent after an application restart</td><td>1</td><td>Did not run</td></tr>
-<tr><td><code>AssistantPageIntegrationTests</code></td><td>Assistant page renders for customers with CSRF token; other roles refused</td><td>2</td><td>Did not run</td></tr>
-<tr><td colspan="2"><b>Milestone 4 total</b></td><td><b>63</b></td><td><b>9 passed</b></td></tr></table>
+<tr><td><code>AgentBookingConfirmationIntegrationTests</code></td><td>Nothing written before confirmation; confirm books through BookingService; decline; foreign or expired tokens; prompt injection; conflict alternatives; cancellation</td><td>11</td><td>Passed (11/11)</td></tr>
+<tr><td><code>AgentBookingConcurrencyIntegrationTests</code></td><td>Professor&#x27;s required test: concurrent agent and direct bookings of one slot, exactly one succeeds, verified in PostgreSQL</td><td>2</td><td>Passed (2/2)</td></tr>
+<tr><td><code>ReminderAgentIntegrationTests</code></td><td>Scheduled/manual runs, Gemini text through the outbox, no duplicates, concurrent runs, Gemini failure fallback, admin-only endpoint with CSRF</td><td>10</td><td>9 of 10 passed (1 failure, see text)</td></tr>
+<tr><td><code>ReminderRestartPersistenceIntegrationTests</code></td><td>Reminders are not resent after an application restart</td><td>1</td><td>Passed (1/1)</td></tr>
+<tr><td><code>AssistantPageIntegrationTests</code></td><td>Assistant page renders for customers with CSRF token; other roles refused</td><td>2</td><td>Passed (2/2)</td></tr>
+<tr><td colspan="2"><b>Milestone 4 total</b></td><td><b>63</b></td><td><b>62 passed, 1 failed</b></td></tr></table>
 <h3>Checks performed by hand</h3>
 <ul>
   <li>Flyway migrations V1–V4 applied cleanly in order to an empty PostgreSQL 16 database.</li>
@@ -385,8 +389,6 @@ showed.</p>
   reminder for the same appointment was rejected by <code>uq_appointment_reminders</code>, a second outbox row with the same
   idempotency key was not inserted, and an invalid content source was rejected by a check constraint.</li>
   <li>A second active appointment for one slot was rejected by <code>uq_appointments_active_slot</code>.</li>
-  <li>All 142 Java source files parse; the only file changed after the CI compile (<code>GeminiEmbeddingConnectionConfig</code>)
-  was checked against the Spring AI 2.0.2 source.</li>
 </ul>
 
 <h2>13. Limitations</h2>
@@ -429,9 +431,11 @@ commits, all authored and committed as <code>yadaltmn</code>:</p>
 <tr><td><code>4d9bd3d</code></td><td>Milestone 4: complete AI integration and regression tests</td></tr>
 <tr><td><code>944c97d</code></td><td>Milestone 4: fix booking confirmation test compilation</td></tr>
 <tr><td><code>b431a55</code></td><td>Milestone 4: start without Gemini key by replacing embedding connection auto-configuration</td></tr>
+<tr><td><code>272bead</code></td><td>Milestone 4: document enterprise AI functionality and deliverables</td></tr>
+<tr><td><code>4b83971</code></td><td>Milestone 4: expect appended confirmation number in admin reminder test</td></tr>
 </table>
-<p>Commits <code>944c97d</code> and <code>b431a55</code> fix a test compile error and the startup error described in
-Section 12. This report, the README, the architecture diagram, and the demonstration script were added in the final commit, "Milestone 4: document enterprise AI functionality and deliverables".</p>
+<p>Commits <code>944c97d</code>, <code>b431a55</code>, and <code>4b83971</code> fix a test compile error, the startup error,
+and the test expectation described in Section 12. This report, the README, the architecture diagram, and the demonstration script were added in "Milestone 4: document enterprise AI functionality and deliverables" (<code>272bead</code>) and updated with these CI results in the final commit, "Milestone 4: update report with CI test results".</p>
 
 </body>
 </html>
