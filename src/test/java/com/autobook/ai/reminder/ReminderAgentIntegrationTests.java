@@ -207,7 +207,9 @@ class ReminderAgentIntegrationTests {
 				"SELECT trigger_source FROM appointment_reminders WHERE appointment_id = ?", String.class, appointmentId));
 		mockMvc.perform(get("/api/admin/ai/reminders"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$[*].message", hasItem("Hi Jada, reminder from the admin-triggered run.")));
+				// The model's text did not include the confirmation number, so AutoBook appends it.
+				.andExpect(jsonPath("$[*].message", hasItem("Hi Jada, reminder from the admin-triggered run. Confirmation number: "
+						+ BookingNotifications.confirmationNumber(appointmentDto(appointmentId)) + ".")));
 	}
 
 	@Test
