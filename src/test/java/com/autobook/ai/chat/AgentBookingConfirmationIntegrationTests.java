@@ -243,7 +243,7 @@ class AgentBookingConfirmationIntegrationTests {
 				.andExpect(jsonPath("$.pendingAction").doesNotExist());
 
 		assertTrue(toolResult.get().contains("is not one of your appointments"));
-		assertEquals("BOOKED", status(alexsAppointment));
+		assertEquals("BOOKED", appointmentStatus(alexsAppointment));
 	}
 
 	@Test
@@ -258,12 +258,12 @@ class AgentBookingConfirmationIntegrationTests {
 
 		ResultActions first = chat(mockMvc, users, JADA, null, "Cancel my oil change appointment")
 				.andExpect(jsonPath("$.pendingAction.type", is("CANCEL")));
-		assertEquals("BOOKED", status(appointmentId), "not cancelled before confirmation");
+		assertEquals("BOOKED", appointmentStatus(appointmentId), "not cancelled before confirmation");
 
 		chat(mockMvc, users, JADA, read(first, "$.conversationId"), "yes")
 				.andExpect(jsonPath("$.reply", containsString("is cancelled")));
 
-		assertEquals("CANCELLED", status(appointmentId), "history kept with status CANCELLED");
+		assertEquals("CANCELLED", appointmentStatus(appointmentId), "history kept with status CANCELLED");
 		assertTrue(slotOpen(slotId));
 	}
 
@@ -307,7 +307,7 @@ class AgentBookingConfirmationIntegrationTests {
 				"SELECT is_available FROM availability_slots WHERE slot_id = ?", Boolean.class, slotId));
 	}
 
-	private String status(long appointmentId) {
+	private String appointmentStatus(long appointmentId) {
 		return jdbc.queryForObject("SELECT status FROM appointments WHERE appointment_id = ?", String.class, appointmentId);
 	}
 }
