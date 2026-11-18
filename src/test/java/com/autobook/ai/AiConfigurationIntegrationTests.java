@@ -10,15 +10,19 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -57,6 +61,18 @@ class AiConfigurationIntegrationTests {
 				.andExpect(jsonPath("$.chatAvailable", is(false)))
 				.andExpect(jsonPath("$.embeddingAvailable", is(false)))
 				.andExpect(jsonPath("$.chatModel", is("")));
+	}
+
+	@Test
+	@WithUserDetails("jada.nguyen@example.com")
+	void aiEndpointsAnswer503WithoutGeminiKey() throws Exception {
+		mockMvc.perform(post("/api/ai/chat").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+						.content("{\"message\":\"Find an oil change\"}"))
+				.andExpect(status().isServiceUnavailable())
+				.andExpect(jsonPath("$.message", containsString("no Gemini API key")));
+		mockMvc.perform(post("/api/ai/faq").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+						.content("{\"question\":\"What is the cancellation policy?\"}"))
+				.andExpect(status().isServiceUnavailable());
 	}
 
 	@Test

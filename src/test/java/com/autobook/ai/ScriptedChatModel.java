@@ -54,6 +54,11 @@ public class ScriptedChatModel implements ChatModel {
         public List<String> names() {
             return new ArrayList<>(callbacks.keySet());
         }
+
+        /** The JSON schema of a tool's arguments, as the model would see it. */
+        public String schema(String name) {
+            return callbacks.get(name).getToolDefinition().inputSchema();
+        }
     }
 
     private final List<Prompt> prompts = new CopyOnWriteArrayList<>();
